@@ -8,11 +8,11 @@ const W = 800, H = 450;
 // ── Palette ──────────────────────────────────────────────────────
 const C = {
   bg: '#08090f',
-  skyTop: '#0d1b2a', skyBot: '#1d5f8a',
-  ground: '#1a3a0d', groundAlt: '#1e4010',
-  track: '#8B2500',
-  trackLine: 'rgba(245,222,179,0.45)',
-  laneW: '#F5DEB3',
+  skyTop: '#4a90d9', skyBot: '#87ceeb',
+  ground: '#2d8a1a', groundAlt: '#35a020',
+  track: '#cc1a2e',
+  trackLine: 'rgba(255,255,255,0.55)',
+  laneW: '#ffffff',
   skin: '#FDBCB4', hair: '#2c1810',
   shirt: '#e63946', pants: '#1d3461', shoe: '#111',
   sandPit: '#F4D03F',
@@ -22,12 +22,35 @@ const C = {
   circle: '#555', circleLine: '#888',
   uiBg: 'rgba(5,10,20,0.88)', uiBrd: '#00e676', uiBrdDim: '#005c2c',
   powerHi: '#00e676', powerMid: '#FFD700', powerLo: '#e63946',
-  white: '#fff', dim: '#666',
+  white: '#fff', dim: '#888',
   gold: '#FFD700', silver: '#C0C0C0', bronze: '#CD7F32',
   red: '#e63946', cyan: '#00e5ff',
   hurdle: '#5d4037',
   stamina: '#4fc3f7',
+  stadiumSeat: '#cc2233',
+  infield: '#4CAF50',
 };
+
+// ── Player profile ────────────────────────────────────────────────
+const PLAYER = {
+  name: 'PLAYER',
+  bodyColor: '#FDBCB4',
+  shirtColor: '#1565C0',
+  pantsColor: '#0d47a1',
+  headwear: 'none', // none | band | cap
+};
+
+// ── Country flags (simplified color blocks) ───────────────────────
+const FLAGS = [
+  { name:'USA',   colors:['#B22234','#fff','#3C3B6E'] },
+  { name:'JAM',   colors:['#000','#FFD700','#009B3A'] },
+  { name:'GBR',   colors:['#012169','#fff','#C8102E'] },
+  { name:'GER',   colors:['#000','#D00','#FFCE00'] },
+  { name:'FRA',   colors:['#002395','#fff','#ED2939'] },
+  { name:'BRA',   colors:['#009C3B','#FFDF00','#002776'] },
+  { name:'CHN',   colors:['#DE2910','#FFDE00','#DE2910'] },
+  { name:'KEN',   colors:['#006600','#CC0000','#000'] },
+];
 
 // ── Event catalog ─────────────────────────────────────────────────
 const CATALOG = [
@@ -150,88 +173,177 @@ function panel(ctx, x, y, w, h, title = '') {
 }
 
 function sky(ctx) {
-  const g = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+  const g = ctx.createLinearGradient(0, 0, 0, H * 0.48);
   g.addColorStop(0, C.skyTop); g.addColorStop(1, C.skyBot);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * 0.55);
-  ctx.fillStyle = 'rgba(255,255,255,0.22)';
-  for (let i = 0; i < 28; i++) ctx.fillRect((i*97+11)%W, (i*43+7)%(H*0.38), 1, 1);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * 0.48);
+  // Clouds
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  [[120,55,34,14],[300,40,48,16],[560,62,40,15],[680,45,30,12]].forEach(([x,y,rw,rh])=>{
+    ctx.beginPath(); ctx.ellipse(x,y,rw,rh,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x+22,y-6,rw*0.7,rh*0.7,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x-18,y-4,rw*0.6,rh*0.6,0,0,Math.PI*2); ctx.fill();
+  });
+}
+
+function stadium(ctx) {
+  // Bleachers / stands behind the track
+  ctx.fillStyle = C.stadiumSeat;
+  ctx.fillRect(0, H*0.46, W, H*0.16);
+  // Crowd dots
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  for (let i=0;i<120;i++) ctx.fillRect((i*67+5)%W, H*0.47+(i%4)*10, 3, 3);
+  ctx.fillStyle = 'rgba(255,230,0,0.18)';
+  for (let i=0;i<80;i++) ctx.fillRect((i*93+40)%W, H*0.49+(i%3)*9, 3, 3);
+  // Flags strip across top
+  const fw=26, fh=16, fy=6, gap=4;
+  const total=(fw+gap)*FLAGS.length;
+  const fx0=(W-total)/2;
+  FLAGS.forEach((f,i)=>{
+    const fx=fx0+i*(fw+gap);
+    const [c1,c2,c3]=f.colors;
+    ctx.fillStyle=c1; ctx.fillRect(fx,fy,fw/3,fh);
+    ctx.fillStyle=c2; ctx.fillRect(fx+fw/3,fy,fw/3,fh);
+    ctx.fillStyle=c3; ctx.fillRect(fx+fw*2/3,fy,fw/3,fh);
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=0.5;
+    ctx.strokeRect(fx,fy,fw,fh);
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.font='6px monospace'; ctx.textAlign='center';
+    ctx.fillText(f.name, fx+fw/2, fy+fh+7);
+  });
+  // Infield green
+  ctx.fillStyle = C.infield;
+  ctx.fillRect(0, H*0.62, W, H*0.02);
 }
 
 function ground(ctx) {
-  const g = ctx.createLinearGradient(0, H * 0.45, 0, H);
-  g.addColorStop(0, C.ground); g.addColorStop(1, '#0e1f08');
-  ctx.fillStyle = g; ctx.fillRect(0, H * 0.45, W, H * 0.55);
+  ctx.fillStyle = C.infield;
+  ctx.fillRect(0, H*0.45, W, H*0.17);
 }
 
 function trackBg(ctx) {
   ctx.fillStyle = C.track; ctx.fillRect(0, H * 0.6, W, H * 0.4);
-  ctx.strokeStyle = C.trackLine; ctx.lineWidth = 0.5; ctx.setLineDash([28, 18]);
-  for (let i = 1; i < 8; i++) {
+  // Lane lines
+  ctx.strokeStyle = C.trackLine; ctx.lineWidth = 1.5;
+  for (let i = 0; i <= 8; i++) {
     const ly = H * 0.6 + i * (H * 0.38 / 8);
     ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(W, ly); ctx.stroke();
   }
-  ctx.setLineDash([]);
-  ctx.strokeStyle = C.laneW; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(0,H*0.6);  ctx.lineTo(W,H*0.6);  ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0,H*0.98); ctx.lineTo(W,H*0.98); ctx.stroke();
+  // Lane numbers
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  for (let i=1;i<=8;i++) {
+    ctx.font='11px monospace'; ctx.textAlign='left';
+    ctx.fillText(String(i), 12, H*0.6+i*(H*0.38/8)-4);
+  }
+}
+
+// Draw a mini player name tag above athlete
+function nameTag(ctx, x, y, name, color) {
+  ctx.font='bold 10px monospace'; ctx.textAlign='center';
+  const tw=ctx.measureText(name).width+8;
+  ctx.fillStyle='rgba(0,0,0,0.55)';
+  ctx.fillRect(x-tw/2, y-26, tw, 14);
+  ctx.fillStyle=color||C.white;
+  ctx.fillText(name, x, y-15);
+}
+
+// HUD delta display: shows +/- vs WR
+function hudDelta(ctx, x, y, elapsed, wr, lower) {
+  const delta = lower ? elapsed - wr : wr - elapsed;
+  const sign = delta >= 0 ? '+' : '';
+  const col = (lower ? delta<=0 : delta>=0) ? C.powerHi : C.red;
+  txt(ctx, '('+sign+delta.toFixed(2)+')', x, y, 10, col, 'center');
 }
 
 // ================================================================
 // ATHLETE RENDERER
 // ================================================================
-function athlete(ctx, x, y, scale, frame, facing, pose) {
+function athlete(ctx, x, y, scale, frame, facing, pose, cfg) {
+  // cfg: { shirt, pants, skin, headwear } — falls back to PLAYER colors
+  const shirt  = (cfg && cfg.shirt)  || PLAYER.shirtColor;
+  const pants  = (cfg && cfg.pants)  || PLAYER.pantsColor;
+  const skin   = (cfg && cfg.skin)   || PLAYER.bodyColor;
+  const hw     = (cfg && cfg.headwear!==undefined) ? cfg.headwear : PLAYER.headwear;
+
   ctx.save();
   ctx.translate(x, y); ctx.scale(facing * scale, scale);
   const ls = Math.sin(frame * 0.32) * 0.55;
   const as = -ls;
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath(); ctx.ellipse(0, 43, 17, 5, 0, 0, Math.PI*2); ctx.fill();
   ctx.lineWidth = 5; ctx.lineCap = 'round';
   if (pose === 'run') {
-    ctx.strokeStyle = C.pants;
+    ctx.strokeStyle = pants;
     ctx.beginPath(); ctx.moveTo(0,15); ctx.lineTo(-7+ls*16,30); ctx.lineTo(-7+ls*11,43); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,15); ctx.lineTo( 7-ls*16,30); ctx.lineTo( 7-ls*11,43); ctx.stroke();
-    ctx.strokeStyle = C.shoe; ctx.lineWidth = 3;
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(-7+ls*11,43); ctx.lineTo(-13+ls*11,44); ctx.stroke();
     ctx.beginPath(); ctx.moveTo( 7-ls*11,43); ctx.lineTo( 13-ls*11,44); ctx.stroke();
-    ctx.strokeStyle = C.shirt; ctx.lineWidth = 6;
+    ctx.strokeStyle = shirt; ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(0,-5); ctx.lineTo(0,15); ctx.stroke();
-    ctx.strokeStyle = C.skin; ctx.lineWidth = 4;
+    ctx.strokeStyle = skin; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(0,2); ctx.lineTo(-13-as*13,14); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,2); ctx.lineTo( 13+as*13,14); ctx.stroke();
   } else if (pose === 'jump') {
-    ctx.strokeStyle = C.pants;
+    ctx.strokeStyle = pants;
     ctx.beginPath(); ctx.moveTo(0,15); ctx.lineTo(-16,28); ctx.lineTo(-20,38); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,15); ctx.lineTo( 16,28); ctx.lineTo( 20,38); ctx.stroke();
-    ctx.strokeStyle = C.shirt; ctx.lineWidth = 6;
+    ctx.strokeStyle = shirt; ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(0,-5); ctx.lineTo(0,15); ctx.stroke();
-    ctx.strokeStyle = C.skin; ctx.lineWidth = 4;
+    ctx.strokeStyle = skin; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(0,2); ctx.lineTo(-18,-4); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,2); ctx.lineTo( 18,-4); ctx.stroke();
   } else if (pose === 'vault') {
-    ctx.strokeStyle = C.pants;
+    ctx.strokeStyle = pants;
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-8,15); ctx.lineTo(-10,28); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo( 8,15); ctx.lineTo( 10,28); ctx.stroke();
-    ctx.strokeStyle = C.shirt; ctx.lineWidth = 6;
+    ctx.strokeStyle = shirt; ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(0,0); ctx.stroke();
-    ctx.strokeStyle = C.skin; ctx.lineWidth = 4;
+    ctx.strokeStyle = skin; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(-16,-18); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo( 16,-18); ctx.stroke();
   } else if (pose === 'throw') {
-    ctx.strokeStyle = C.pants;
+    ctx.strokeStyle = pants;
     ctx.beginPath(); ctx.moveTo(-5,15); ctx.lineTo(-10,30); ctx.lineTo(-12,43); ctx.stroke();
     ctx.beginPath(); ctx.moveTo( 5,15); ctx.lineTo( 10,30); ctx.lineTo(  8,43); ctx.stroke();
-    ctx.strokeStyle = C.shirt; ctx.lineWidth = 6;
+    ctx.strokeStyle = shirt; ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(0,-5); ctx.lineTo(0,15); ctx.stroke();
-    ctx.strokeStyle = C.skin; ctx.lineWidth = 4;
+    ctx.strokeStyle = skin; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(0,2); ctx.lineTo(-13,11); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,2); ctx.lineTo( 20,-9); ctx.stroke();
   }
-  ctx.fillStyle = C.skin;
+  // Head
+  ctx.fillStyle = skin;
   ctx.beginPath(); ctx.arc(0,-13,9,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle = C.hair;
+  // Hair
+  ctx.fillStyle = '#2c1810';
   ctx.beginPath(); ctx.arc(0,-18,9,Math.PI,0); ctx.fill();
+  // Headwear
+  if (hw === 'band') {
+    ctx.strokeStyle = C.red; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0,-13,10,-Math.PI*0.85,-Math.PI*0.15); ctx.stroke();
+  } else if (hw === 'cap') {
+    ctx.fillStyle = shirt;
+    ctx.beginPath(); ctx.ellipse(0,-22,11,5,0,Math.PI,0); ctx.fill();
+    ctx.fillRect(-11,-22,22,-5);
+    ctx.fillStyle = shirt;
+    ctx.beginPath(); ctx.ellipse(-11,-22,5,3,0.3,0,Math.PI*2); ctx.fill();
+  }
   ctx.restore();
+}
+
+// AI opponent athlete with fixed color set
+const AI_KITS = [
+  {shirt:'#e63946',pants:'#222',skin:'#8D5524'},
+  {shirt:'#FFD700',pants:'#333',skin:'#FDBCB4'},
+  {shirt:'#9C27B0',pants:'#1a1a1a',skin:'#C68642'},
+  {shirt:'#00BCD4',pants:'#111',skin:'#FDBCB4'},
+  {shirt:'#4CAF50',pants:'#222',skin:'#8D5524'},
+  {shirt:'#FF5722',pants:'#333',skin:'#C68642'},
+  {shirt:'#E91E63',pants:'#111',skin:'#FDBCB4'},
+];
+function aiAthlete(ctx, x, y, scale, frame, idx, pose) {
+  const kit = AI_KITS[idx % AI_KITS.length];
+  athlete(ctx, x, y, scale, frame, 1, pose, {...kit, headwear:'none'});
 }
 
 // ================================================================
@@ -495,7 +607,14 @@ class SprintEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx); ground(ctx); trackBg(ctx);
+    sky(ctx); stadium(ctx); ground(ctx); trackBg(ctx);
+    // AI opponents
+    const aiLanes=[H*0.65,H*0.70,H*0.76,H*0.81,H*0.86];
+    for(let i=0;i<5;i++){
+      const aiProg=clamp(this.progress-(0.04*(i+1)),0,1);
+      const aiX=W*0.28+(aiProg-this.progress)*this.dist*3.2;
+      if(aiX>-30&&aiX<W+30) aiAthlete(ctx,aiX,aiLanes[i],0.95,this.sm.steps,i,'run');
+    }
     // Finish line
     const fx = W*0.85 + (1-this.progress)*W*2.5;
     if (fx<W+20) {
@@ -508,17 +627,24 @@ class SprintEvent extends BaseEvent {
       }
     }
     athlete(ctx,W*0.28,H*0.72,1.2,this.sm.steps,1,'run');
-    panel(ctx,10,10,172,68);
-    txt(ctx,this.dist+'m SPRINT',96,28,12,C.gold,'center',true);
-    txt(ctx,this.elapsed.toFixed(2)+'s',96,46,15,C.white,'center',true);
-    txt(ctx,Math.round(this.progress*this.dist)+'m',96,62,10,C.dim);
+    nameTag(ctx,W*0.28,H*0.72,PLAYER.name,C.gold);
+    // HUD top-right: time + mph + delta
+    panel(ctx,W-210,10,200,68);
+    txt(ctx,this.dist+'m',W-110,24,11,C.gold,'center',true);
+    txt(ctx,this.elapsed.toFixed(2)+'s',W-110,46,18,C.white,'center',true);
+    const mph=(this.sm.speed*this.dist*0.022369).toFixed(1);
+    txt(ctx,mph+' mph',W-110,62,10,C.dim,'center');
+    hudDelta(ctx,W-110,74,this.elapsed,WR[this.id],true);
+    // HUD top-left
+    panel(ctx,10,10,155,50);
+    txt(ctx,this.dist+'m SPRINT',87,26,12,C.gold,'center',true);
+    txt(ctx,Math.round(this.progress*this.dist)+'m / '+this.dist+'m',87,43,10,C.dim);
     // Stamina for 400m
     if (this.dist===400 && this.phase==='running') {
-      panel(ctx,10,82,172,30,'STAMINA');
-      bar(ctx,18,96,156,12,this.stamina,100,'#1a1a1a',C.stamina);
+      panel(ctx,10,64,155,26,'STAMINA');
+      bar(ctx,18,76,138,10,this.stamina,100,'#1a1a1a',C.stamina);
     }
-    panel(ctx,W-195,10,185,62);
-    this.sm.drawMeter(ctx,W-185,28,165);
+    this.sm.drawMeter(ctx,W-200,28,180);
     if (this.phase==='countdown') {
       ctx.fillStyle='rgba(0,0,0,0.62)'; ctx.fillRect(0,0,W,H);
       txt(ctx,this.countdown>0?String(this.countdown):'GO!',W/2,H/2+18,76,
@@ -579,7 +705,7 @@ class HurdlesEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx); ground(ctx); trackBg(ctx);
+    sky(ctx); stadium(ctx); ground(ctx); trackBg(ctx);
     const gy=H*0.72;
     for (const h of this.hurdles) {
       const hx=(h.pos-this.progress)*this.dist*38+W*0.28;
@@ -590,14 +716,19 @@ class HurdlesEvent extends BaseEvent {
       ctx.beginPath(); ctx.moveTo(hx-14,gy-28); ctx.lineTo(hx-14,gy); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(hx+14,gy-28); ctx.lineTo(hx+14,gy); ctx.stroke();
     }
-    athlete(ctx,W*0.28,gy-(this.jumping?this.jumpY:0),1.2,this.sm.steps,1,this.jumping?'jump':'run');
+    const playerY=gy-(this.jumping?this.jumpY:0);
+    athlete(ctx,W*0.28,playerY,1.2,this.sm.steps,1,this.jumping?'jump':'run');
+    nameTag(ctx,W*0.28,playerY,PLAYER.name,C.gold);
     if (this.hitFlash>0){ctx.fillStyle=`rgba(230,57,70,${this.hitFlash*0.6})`;ctx.fillRect(0,0,W,H);}
     panel(ctx,10,10,172,68);
     txt(ctx,this.dist+'m HURDLES',96,28,11,C.gold,'center',true);
     txt(ctx,this.elapsed.toFixed(2)+'s',96,46,15,C.white,'center',true);
     const cl=this.hurdles.filter(h=>h.cleared).length;
     txt(ctx,cl+'/'+this.hurdles.length+' cleared',96,62,10,C.dim);
-    panel(ctx,W-195,10,185,62); this.sm.drawMeter(ctx,W-185,28,165);
+    panel(ctx,W-210,10,200,68);
+    txt(ctx,this.elapsed.toFixed(2)+'s',W-110,40,18,C.white,'center',true);
+    hudDelta(ctx,W-110,58,this.elapsed,WR[this.id],true);
+    this.sm.drawMeter(ctx,W-200,28,180);
     if (this.phase==='countdown'){
       ctx.fillStyle='rgba(0,0,0,0.62)';ctx.fillRect(0,0,W,H);
       txt(ctx,this.countdown>0?String(this.countdown):'GO!',W/2,H/2+18,76,this.countdown>0?C.white:C.powerHi,'center',true);
@@ -659,7 +790,7 @@ class LongJumpEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx);
+    sky(ctx); stadium(ctx);
     if (this.phase==='approach') {
       ground(ctx); trackBg(ctx);
       ctx.fillStyle=C.sandPit; ctx.fillRect(W*0.68,H*0.6,W*0.36,H*0.38);
@@ -672,6 +803,7 @@ class LongJumpEvent extends BaseEvent {
       const wc=this.wind>0?C.powerHi:this.wind<0?C.red:C.dim;
       txt(ctx,'WIND '+(this.wind>0?'+':'')+this.wind+'m/s',W*0.5,H*0.56,10,wc);
       athlete(ctx,W*0.28,H*0.72,1.2,this.sm.steps,1,'run');
+      nameTag(ctx,W*0.28,H*0.72,PLAYER.name,C.gold);
       panel(ctx,10,10,172,50); txt(ctx,'LONG JUMP',96,26,12,C.gold,'center',true); txt(ctx,'Sprint to the board!',96,42,10,C.dim);
       panel(ctx,W-195,10,185,62); this.sm.drawMeter(ctx,W-185,28,165);
       this.hints(ctx,[{key:'A/D',desc:'Sprint'},{key:'SPC',desc:'Jump at board'}]);
@@ -776,8 +908,8 @@ class TripleJumpEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx);
-    ctx.fillStyle='#2d6b1a'; ctx.fillRect(0,H*0.5,W,H*0.5);
+    sky(ctx); stadium(ctx);
+    ctx.fillStyle=C.infield; ctx.fillRect(0,H*0.5,W,H*0.5);
     ctx.fillStyle=C.track; ctx.fillRect(0,H*0.6,W*0.58,H*0.4);
     ctx.fillStyle=C.sandPit; ctx.fillRect(W*0.53,H*0.6,W*0.5,H*0.4);
     const labels=['HOP','STEP','JUMP'];
@@ -870,7 +1002,7 @@ class HighJumpEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx); ctx.fillStyle=C.ground; ctx.fillRect(0,H*0.55,W,H*0.45);
+    sky(ctx); stadium(ctx); ctx.fillStyle=C.infield; ctx.fillRect(0,H*0.55,W,H*0.45);
     ctx.fillStyle=C.mat; ctx.fillRect(W*0.42,H*0.58,165,82);
     txt(ctx,'MAT',W*0.42+82,H*0.645,10,'#fff');
     const by=this.screenBarY;
@@ -987,7 +1119,7 @@ class PoleVaultEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx); ctx.fillStyle=C.ground; ctx.fillRect(0,H*0.5,W,H*0.5);
+    sky(ctx); stadium(ctx); ctx.fillStyle=C.infield; ctx.fillRect(0,H*0.5,W,H*0.5);
     ctx.fillStyle=C.track; ctx.fillRect(0,H*0.6,W,H*0.4);
     // Pit
     ctx.fillStyle=C.mat; ctx.fillRect(W*0.68,H*0.6,165,H*0.38);
@@ -1093,9 +1225,9 @@ class ThrowingEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx);
+    sky(ctx); stadium(ctx);
     if (this.phase==='throwing') {
-      ctx.fillStyle=C.ground; ctx.fillRect(0,H*0.5,W,H*0.5);
+      ctx.fillStyle=C.infield; ctx.fillRect(0,H*0.5,W,H*0.5);
       const cx=W*0.5, cy=H*0.72;
       ctx.strokeStyle=C.circle; ctx.lineWidth=3;
       ctx.beginPath(); ctx.arc(cx,cy,42,0,Math.PI*2); ctx.stroke();
@@ -1226,7 +1358,7 @@ class JavelinEvent extends BaseEvent {
   }
   render() {
     const ctx=this.ctx;
-    sky(ctx);
+    sky(ctx); stadium(ctx);
     if (this.phase==='approach') {
       ground(ctx); trackBg(ctx);
       ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1;
@@ -1364,13 +1496,19 @@ class TouchControls {
 // ================================================================
 // GAME
 // ================================================================
+// ── Color presets for customizer ─────────────────────────────────
+const SKIN_OPTS  = ['#FDBCB4','#C68642','#8D5524','#F1C27D','#FFDBAC'];
+const SHIRT_OPTS = ['#1565C0','#e63946','#2E7D32','#6A1B9A','#E65100','#37474F','#FFD700','#880E4F'];
+const PANTS_OPTS = ['#0d47a1','#1a1a1a','#1B5E20','#4A148C','#BF360C','#263238','#F57F17'];
+const HW_OPTS    = ['none','band','cap'];
+
 class Game {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.input = new Input();
     this.touch = new TouchControls(canvas, this.input);
-    this.state = 'menu';
+    this.state = 'customize';
     this.currentEvent = null;
     this.currentId = null;
     this.records = this._loadRec();
@@ -1378,6 +1516,15 @@ class Game {
     this.resultT = 0;
     this.lastTS = 0;
     this.isMobile = ('ontouchstart' in window);
+    // Customizer state
+    this.custRow = 0; // 0=name,1=skin,2=shirt,3=pants,4=hw
+    this.custNameChars = Array.from(PLAYER.name);
+    this.custSkin  = SKIN_OPTS.indexOf(PLAYER.bodyColor)||0;
+    this.custShirt = SHIRT_OPTS.indexOf(PLAYER.shirtColor)||0;
+    this.custPants = PANTS_OPTS.indexOf(PLAYER.pantsColor)||0;
+    this.custHW    = 0;
+    this._nameEdit = false;
+    this._nameInput = PLAYER.name;
   }
   _loadRec() { try{return JSON.parse(localStorage.getItem('ss2_rec'))||{};}catch{return {};} }
   _saveRec(id, val) {
@@ -1417,10 +1564,31 @@ class Game {
     window.requestAnimationFrame(this._loop.bind(this));
   }
   _update(dt) {
+    if (this.state==='customize') {
+      const rows=5;
+      if (this.input.wasPressed('ArrowDown')||this.input.wasPressed('KeyS')) this.custRow=(this.custRow+1)%rows;
+      if (this.input.wasPressed('ArrowUp')||this.input.wasPressed('KeyW'))   this.custRow=(this.custRow-1+rows)%rows;
+      const left  = this.input.wasPressed('ArrowLeft')||this.input.wasPressed('KeyA');
+      const right = this.input.wasPressed('ArrowRight')||this.input.wasPressed('KeyD');
+      if (this.custRow===1) { if(right) this.custSkin=(this.custSkin+1)%SKIN_OPTS.length; if(left) this.custSkin=(this.custSkin-1+SKIN_OPTS.length)%SKIN_OPTS.length; PLAYER.bodyColor=SKIN_OPTS[this.custSkin]; }
+      if (this.custRow===2) { if(right) this.custShirt=(this.custShirt+1)%SHIRT_OPTS.length; if(left) this.custShirt=(this.custShirt-1+SHIRT_OPTS.length)%SHIRT_OPTS.length; PLAYER.shirtColor=SHIRT_OPTS[this.custShirt]; }
+      if (this.custRow===3) { if(right) this.custPants=(this.custPants+1)%PANTS_OPTS.length; if(left) this.custPants=(this.custPants-1+PANTS_OPTS.length)%PANTS_OPTS.length; PLAYER.pantsColor=PANTS_OPTS[this.custPants]; }
+      if (this.custRow===4) { if(right) this.custHW=(this.custHW+1)%HW_OPTS.length; if(left) this.custHW=(this.custHW-1+HW_OPTS.length)%HW_OPTS.length; PLAYER.headwear=HW_OPTS[this.custHW]; }
+      if (this.input.wasPressed('Enter')||this.input.wasPressed('Space')) {
+        if (this.custRow===0) {
+          // Cycle through preset names or allow confirm
+          this.state='menu';
+        } else {
+          this.state='menu';
+        }
+      }
+      return;
+    }
     if (this.state==='menu') {
       if (this.input.wasPressed('ArrowDown')||this.input.wasPressed('KeyS')) this.menuCursor=(this.menuCursor+1)%CATALOG.length;
       if (this.input.wasPressed('ArrowUp')||this.input.wasPressed('KeyW'))   this.menuCursor=(this.menuCursor-1+CATALOG.length)%CATALOG.length;
       if (this.input.wasPressed('Enter')||this.input.wasPressed('Space')) this._startEvent(CATALOG[this.menuCursor].id);
+      if (this.input.wasPressed('KeyC')) { this.state='customize'; this.custRow=0; }
     } else if (this.state==='game') {
       if (this.currentEvent) {
         this.currentEvent.update(dt);
@@ -1439,14 +1607,83 @@ class Game {
       if (this.input.wasPressed('Enter')||this.input.wasPressed('Space')) this.state='menu';
       if (this.input.wasPressed('KeyR')) this._startEvent(this.currentId);
       if (this.input.wasPressed('Escape')) this.state='menu';
+      if (this.input.wasPressed('KeyC')) { this.state='customize'; this.custRow=0; }
     }
   }
   _render() {
     const ctx=this.ctx;
+    if (this.state==='customize') { this._renderCustomize(ctx); return; }
     if (this.state==='menu') { this._renderMenu(ctx); return; }
     if (this.currentEvent) this.currentEvent.render();
     if (this.isMobile) this.touch.render(ctx);
     if (this.state==='result') this._renderResult(ctx);
+  }
+
+  _renderCustomize(ctx) {
+    // Background
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0d1117'); g.addColorStop(1,'#0a1420');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // Track preview at bottom
+    ctx.fillStyle=C.track; ctx.fillRect(0,H*0.78,W,H*0.22);
+    for(let i=0;i<=8;i++){ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H*0.78+i*H*0.22/8);ctx.lineTo(W,H*0.78+i*H*0.22/8);ctx.stroke();}
+
+    // Title
+    txt(ctx,'CUSTOMIZE ATHLETE',W/2,36,18,C.gold,'center',true);
+    txt(ctx,'↑↓ select  ·  ←→ change  ·  ENTER to play',W/2,54,10,C.dim,'center');
+
+    // Preview athlete on track
+    const previewX=W*0.72, previewY=H*0.86;
+    athlete(ctx,previewX,previewY,2.0,6,1,'run');
+    nameTag(ctx,previewX,previewY,PLAYER.name,C.gold);
+
+    // Panel
+    const px=60, py=70, pw=W*0.52, ph=260;
+    ctx.fillStyle='rgba(5,10,20,0.88)'; ctx.strokeStyle=C.uiBrd; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.roundRect(px,py,pw,ph,6); ctx.fill(); ctx.stroke();
+
+    const rows=[
+      {label:'NAME',   val:PLAYER.name,  opts:null},
+      {label:'BODY',   val:'',           opts:SKIN_OPTS,  cur:this.custSkin},
+      {label:'TOP',    val:'',           opts:SHIRT_OPTS, cur:this.custShirt},
+      {label:'SHORTS', val:'',           opts:PANTS_OPTS, cur:this.custPants},
+      {label:'HEADWEAR',val:HW_OPTS[this.custHW].toUpperCase(), opts:HW_OPTS, cur:this.custHW},
+    ];
+    rows.forEach((row,i)=>{
+      const ry=py+34+i*44;
+      const sel=i===this.custRow;
+      if(sel){ ctx.fillStyle='rgba(0,230,118,0.12)'; ctx.fillRect(px+6,ry-18,pw-12,36); }
+      txt(ctx,(sel?'▶ ':' ')+row.label,px+22,ry,11,sel?C.white:C.dim,'left',sel);
+      if(row.opts && row.label!=='HEADWEAR') {
+        // Color swatches
+        const sw=18, sg=4, nx=px+130;
+        row.opts.forEach((c,j)=>{
+          const sx=nx+j*(sw+sg);
+          if(sx>px+pw-20) return;
+          ctx.fillStyle=c;
+          ctx.beginPath(); ctx.roundRect(sx,ry-9,sw,sw,3); ctx.fill();
+          if(j===row.cur){ ctx.strokeStyle=C.white; ctx.lineWidth=2; ctx.strokeRect(sx-1,ry-10,sw+2,sw+2); }
+        });
+        // Arrows
+        if(sel){
+          txt(ctx,'◀',px+122,ry+2,13,C.gold,'right');
+          txt(ctx,'▶',px+pw-8,ry+2,13,C.gold,'right');
+        }
+      } else if(row.opts) {
+        // Text option (headwear)
+        txt(ctx,row.val,px+200,ry,12,sel?C.gold:C.dim,'left',sel);
+        if(sel){ txt(ctx,'◀',px+190,ry+1,13,C.gold,'right'); txt(ctx,'▶',px+pw-16,ry+1,13,C.gold,'right'); }
+      } else {
+        txt(ctx,row.val,px+200,ry,12,C.cyan,'left',true);
+      }
+    });
+
+    // RUN NOW button
+    const bw=180,bh=40,bx=W/2-bw/2,by=H*0.65;
+    ctx.fillStyle=this.custRow>=0?'#cc1a2e':'#555';
+    ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,8); ctx.fill();
+    txt(ctx,'▶  RUN NOW',W/2,by+26,16,C.white,'center',true);
+    txt(ctx,'ENTER or SPACE',W/2,by+bh+14,10,C.dim,'center');
   }
   _renderMenu(ctx) {
     const g=ctx.createLinearGradient(0,0,0,H);
@@ -1491,6 +1728,9 @@ class Game {
     txt(ctx,sel.name,W/2,H-40,13,C.gold,'center',true);
     txt(ctx,sel.desc+'  |  '+sel.ctrl,W/2,H-24,10,C.dim);
     txt(ctx,'ENTER/SPACE to play  ·  ↑↓ navigate  ·  ESC from event',W/2,H-8,9,C.uiBrdDim);
+    // Customize shortcut
+    ctx.fillStyle='rgba(0,230,118,0.12)'; ctx.beginPath(); ctx.roundRect(W-108,H-26,100,18,4); ctx.fill();
+    txt(ctx,'[C] CUSTOMIZE',W-58,H-13,9,C.uiBrd,'center');
   }
   _renderResult(ctx) {
     const alpha=Math.min(1,this.resultT*2.2);
@@ -1514,7 +1754,7 @@ class Game {
     const isPB=pb===res.value;
     if (isPB) txt(ctx,'★  PERSONAL BEST  ★',W/2,H/2+46,14,C.gold,'center',true);
     else if (pb!==undefined) txt(ctx,'PB: '+pb.toFixed(2)+res.unit,W/2,H/2+46,11,C.dim);
-    txt(ctx,'ENTER — Menu   R — Retry   ESC — Menu',W/2,H/2+88,11,C.dim);
+    txt(ctx,'ENTER — Menu   R — Retry   C — Customize   ESC — Menu',W/2,H/2+88,11,C.dim);
   }
 }
 
@@ -1526,6 +1766,15 @@ window.addEventListener('load', () => {
   canvas.width = W; canvas.height = H;
   const game = new Game(canvas);
   document.addEventListener('keydown', e => {
+    if (game.state==='customize' && game.custRow===0) {
+      if (e.code==='Backspace') {
+        PLAYER.name = PLAYER.name.slice(0,-1)||'P';
+        e.preventDefault();
+      } else if (/^Key[A-Z]$/.test(e.code) && PLAYER.name.length<10) {
+        PLAYER.name += e.key.toUpperCase();
+        e.preventDefault();
+      }
+    }
     if (game.state==='game'&&game.currentEvent) game.currentEvent.onKey(e.code);
   });
   game.start();
