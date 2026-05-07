@@ -8,35 +8,38 @@ Recreates and expands on the original SpeedStars with all field events including
 - HTML5 Canvas (800×450)
 - Vanilla JavaScript (ES6, no frameworks, no build tools)
 - LocalStorage for personal bests
-- GitHub Pages compatible (static files only)
+- GitHub Pages compatible — static files only, no build step
+- GitHub Actions for automatic deployment on push to `main`
 
 ## Controls Design
-- **Sprint mechanic**: Alternate A / D (or ← →) — cadence ~5/sec, max speed 10, same key = penalty
-- **Throwing mechanic**: 3-phase — Build Power (A/D rhythm, optimal ~4-5/sec, too fast loses control) → Aim (Space to lock angle on oscillating needle) → Release (Space at peak of pulsing ring)
-- **Jump events**: Sprint with A/D then Space to jump at the right moment
-- **High jump**: Space to jump, timing bar determines height
+- **Sprint**: Alternate A / D (or ← →) — cadence ~5/sec, max speed 10
+- **Throwing**: 3-phase — Build Power (A/D rhythm, optimal ~4-5/sec) → Aim (Space to lock oscillating needle) → Release (Space at peak of pulse ring)
+- **Jump events**: Sprint A/D then Space to jump at the right moment
+- **High jump / Pole vault**: Space on timing bar
+- **Touch**: On-screen A, D, SPACE buttons (auto-shown on mobile)
 
 ---
 
 ## Events Checklist
 
 ### Track Events
-- [x] 100m Sprint — countdown → sprint → finish time
-- [x] 200m Sprint — same mechanic, longer distance
-- [x] 400m Sprint — endurance variant
-- [x] 110m Hurdles — sprint + Space to clear hurdles, hit = speed penalty
-- [x] 400m Hurdles — longer hurdle race
+- [x] 100m Sprint
+- [x] 200m Sprint
+- [x] 400m Sprint — with stamina bar (depletes at high speed, limits top speed)
+- [x] 110m Hurdles — Space to clear, hit = speed penalty
+- [x] 400m Hurdles
 
 ### Jump Events
-- [x] Long Jump — sprint approach, Space at board, flight arc, distance result
-- [x] Triple Jump — sprint, then Space 3× for hop-step-jump
-- [x] High Jump — timing bar approach, bar increments each success, 3 failures = done
+- [x] Long Jump — sprint approach + Space at board + arc
+- [x] Triple Jump — hop/step/jump × 3
+- [x] High Jump — timing bar, bar increments, 3 failures = done
+- [x] Pole Vault — sprint → plant timing → pull timing → clearance
 
 ### Throwing Events
-- [x] Shot Put — full 3-phase throw mechanic (A/D rhythm + aim + release)
-- [x] Discus Throw — same mechanic, more rotations, optimal cadence 5/sec
-- [x] Javelin Throw — sprint run-up (A/D) → aim → release (own class)
-- [x] Hammer Throw — same 3-phase mechanic, 3.5s windup, most rotations
+- [x] Shot Put — 3-phase mechanic (rhythm/aim/release), wind applied
+- [x] Discus Throw — same mechanic, higher optimal cadence, more wind effect
+- [x] Javelin Throw — run-up sprint then aim + release, wind applied
+- [x] Hammer Throw — 3.5s wind-up, most rotations
 
 ---
 
@@ -44,62 +47,73 @@ Recreates and expands on the original SpeedStars with all field events including
 
 ### Core Game
 - [x] Main menu — 3-column layout (Track / Jump / Throw), keyboard navigation
-- [x] Event start / countdown overlay
+- [x] Event start / countdown with gun sound
 - [x] 60fps game loop with delta-time
-- [x] Result screen — shows time/distance, WR comparison bar, medal rating
+- [x] Result screen — time/distance, WR comparison bar, level rating
 - [x] Personal bests saved to localStorage
 - [x] Escape to return to menu
+- [x] Retry with R key
 
-### Athlete Renderer
-- [x] Stick figure athlete with running animation (limb swing from step count)
-- [x] Jump pose
-- [x] Throw pose
-- [x] Shadow under athlete
+### Mechanics
+- [x] Sprint cadence mechanic (same-key penalty, speed 0–10)
+- [x] 400m stamina — depletes at high speed, limits max speed when empty
+- [x] Throwing 3-phase — rhythm build, angle aim, release timing
+- [x] Wind mechanic — random –4 to +4 m/s, shown during event, applied to distance
+- [x] Distance calculations calibrated — average of 3 skill factors × range [minDist, WR]
+
+### Sound (Web Audio API, no files)
+- [x] Step sounds (A/D key presses)
+- [x] Jump sound
+- [x] Land sound
+- [x] Starting gun
+- [x] Throw whoosh
+- [x] Hurdle clearance
+- [x] Bar clearance
+- [x] Personal best fanfare
 
 ### Visual / UX
-- [x] Sky gradient + subtle star background
-- [x] Scrolling track with lane lines
-- [x] Sand pit for long/triple jump
-- [x] Hurdles drawn with correct dimensions
-- [x] High jump mat, standards, and bar
-- [x] Throwing circle
-- [x] Trajectory arc (bird's-eye sector view for throws)
-- [x] Distance markers on throw field
-- [x] Speed meter with colour zones (red/amber/green)
-- [x] Rhythm gauge for throwing wind-up
+- [x] Sky gradient + stars
+- [x] Scrolling track with lane lines, finish line
+- [x] Sand pit for jump events
+- [x] Hurdles with hit/cleared colour states
+- [x] High jump: mat, standards, bar, timing UI
+- [x] Pole vault: bar, standards, mat, bending pole arc, athlete vault pose
+- [x] Throwing circle with spinning line
+- [x] Bird's-eye sector view for throw trajectory
+- [x] Wind indicator on all outdoor events
+- [x] Speed meter with colour zones
+- [x] Rhythm gauge for throwing
 - [x] Angle protractor gauge
 - [x] Pulsing release ring
+- [x] Phase indicator (BUILD / AIM / RELEASE)
+- [x] Stamina bar on 400m
+
+### Mobile
+- [x] Touch controls — A, D, SPACE buttons auto-shown on touchscreen
+
+### Deployment
+- [x] GitHub Actions workflow — auto-deploys to GitHub Pages on push to `main`
 
 ---
 
 ## Still To Do (Human Tasks or Future Cycles)
 
-### Code / Features
-- [ ] **Pole Vault** — requires more complex arc physics + bar clearance logic; skipped for v1
-- [ ] **400m Sprint pacing mechanic** — currently identical to 100m; could add fatigue/stamina bar
-- [ ] **Sound effects** — Web Audio API beeps for steps, jump, land, crowd cheer on PB
-- [ ] **Crowd reaction system** — text animations (OOOOH, CROWD GOES WILD) on good throws
-- [ ] **Career/progression mode** — qualify for events, championships, season structure
-- [ ] **Multiplayer** — local 2-player split controls or WebSocket online
-- [ ] **Animated intro sequence** — athlete walks to start line
-- [ ] **Medal ceremony screen** — podium visual for gold/silver/bronze results
-- [ ] **World leaderboard** — online PB sharing (requires backend)
-- [ ] **Mobile touch controls** — tap buttons for A/D and Space on touchscreen
-- [ ] **Athlete customisation** — choose jersey colour, name
+### Requires Human Action
+- [ ] **GitHub Pages activation** — Go to repo Settings → Pages → Source: "GitHub Actions" → Save. This is a one-time click in the GitHub UI. Then merge this branch into `main` and the site deploys automatically.
+- [ ] **Play-test and tune distances** — All 12 events need real play-testing. Calibrate so bronze ~65% WR, gold ~95% WR, requires genuine skill but is achievable.
+- [ ] **Tune rhythm window** — Play-test throwing cadence (optimal 4-5/sec). Is the green zone too wide? Too forgiving? Adjust `optCadence` and `windupDuration` in `game._startEvent()`.
+- [ ] **Balance sprint speed** — Verify the A/D cadence → m/s mapping feels right. Adjust the `1.12` multiplier in `SprintMechanic.update()`.
 
-### Polish
-- [ ] **Wind mechanic** — for throws and long/triple jump, affects distance
-- [ ] **Fosbury flop animation** — proper over-the-bar back arch for high jump
-- [ ] **Better athlete sprite** — more detailed or sprite-sheet based
-- [ ] **Track/stadium background art** — crowd stands, sky, flags
-- [ ] **Event replay** — watch your best attempt again
-- [ ] **Tutorial overlay** — first-time explanation of each mechanic
-
-### Human / Design Tasks
-- [ ] **Tune distances** — play-test all 12 events and calibrate so gold medal requires genuine skill
-- [ ] **Tune rhythm window** — play-test optimal cadence range for each throwing event
-- [ ] **Balance sprint speed formula** — verify the A/D cadence to m/s mapping feels right
-- [ ] **GitHub Pages deployment** — push to `gh-pages` branch or configure repo settings
+### Future Code (Lower Priority)
+- [ ] **Fosbury flop animation** — Proper back-arch over the bar for high jump (current is basic arc)
+- [ ] **Better athlete sprite** — More detailed or sprite-sheet based rendering
+- [ ] **Crowd/stadium background** — Stands, crowd, flags
+- [ ] **Crowd reaction text** — "OOOOH!", "CROWD GOES WILD!" animations on big throws
+- [ ] **Career/progression mode** — Qualify for events, championships, season
+- [ ] **Multiplayer** — Local 2-player or online (requires backend)
+- [ ] **World leaderboard** — Online PB sharing (requires backend/server)
+- [ ] **Event replay** — Watch your best attempt again
+- [ ] **Full tutorial** — First-time control explanation per event
 
 ---
 
@@ -107,28 +121,43 @@ Recreates and expands on the original SpeedStars with all field events including
 
 ```
 SpeedStars2.0/
-├── index.html          Entry point
-├── style.css           Visual styles
-├── GAME_PLAN.md        This file
+├── index.html                      Entry point
+├── style.css                       Visual styles
+├── GAME_PLAN.md                    This file
+├── .github/
+│   └── workflows/
+│       └── deploy.yml              Auto-deploy to GitHub Pages on push to main
 └── js/
-    └── game.js         Complete game (~1800 lines, single file)
-                        Sections:
-                          - Constants & colors
-                          - InputHandler
-                          - Utility draw functions
-                          - Athlete renderer
-                          - SprintMechanic (shared)
-                          - ThrowMechanic (shared 3-phase)
-                          - BaseEvent
-                          - SprintEvent (100m, 200m, 400m)
-                          - HurdlesEvent (110m, 400m)
-                          - LongJumpEvent
-                          - TripleJumpEvent
-                          - HighJumpEvent
-                          - ThrowingEvent (ShotPut, Discus, Hammer)
-                          - JavelinEvent
-                          - Game (state machine, menu, results)
+    └── game.js                     Complete game (~1700 lines)
+                                    Sections:
+                                      - Constants & colors
+                                      - InputHandler (keyboard + touch injection)
+                                      - SoundFX (Web Audio API, procedural)
+                                      - Utility draw functions
+                                      - Athlete renderer (run/jump/vault/throw poses)
+                                      - SprintMechanic (shared, step sounds)
+                                      - ThrowMechanic (shared 3-phase, wind)
+                                      - BaseEvent
+                                      - SprintEvent (100m/200m/400m, stamina)
+                                      - HurdlesEvent (110m/400m)
+                                      - LongJumpEvent (wind)
+                                      - TripleJumpEvent (wind)
+                                      - HighJumpEvent
+                                      - PoleVaultEvent (NEW in v2)
+                                      - ThrowingEvent (ShotPut/Discus/Hammer, wind)
+                                      - JavelinEvent (wind)
+                                      - TouchControls
+                                      - Game (state machine, menu, results)
 ```
+
+## How to Deploy to GitHub Pages
+
+**One-time setup:**
+1. Push/merge this branch into `main`
+2. On GitHub: Settings → Pages → Source → "GitHub Actions" → Save
+3. Every future push to `main` auto-deploys in ~30 seconds
+
+**Live URL** (after setup): `https://joel-trumpet-67.github.io/SpeedStars2.0/`
 
 ## World Records Reference
 | Event | WR |
@@ -141,6 +170,7 @@ SpeedStars2.0/
 | Long Jump | 8.95m (Powell) |
 | Triple Jump | 18.29m (Edwards) |
 | High Jump | 2.45m (Sotomayor) |
+| Pole Vault | 6.21m (Mondo) |
 | Shot Put | 23.37m (Barnes) |
 | Discus | 74.08m (Schult) |
 | Javelin | 98.48m (Zelezny) |
