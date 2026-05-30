@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ascend — Train Smarter. Progress Faster.</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { background-color: #030712; }
+    .rank-glow { text-shadow: 0 0 8px currentColor; }
+    .amrap-badge { box-shadow: 0 0 10px rgba(139,92,246,0.6); }
+    .set-done { opacity: 0.5; }
+    .toast-anim { animation: fadeUp 0.3s ease; }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(8px) translateX(-50%); }
+      to   { opacity:1; transform:translateY(0) translateX(-50%); }
+    }
+    .nav-active { color:rgb(167,139,250); border-top:2px solid rgb(167,139,250); margin-top:-2px; }
+    ::-webkit-scrollbar { width:4px; }
+    ::-webkit-scrollbar-thumb { background:#374151; border-radius:2px; }
+    input[type=number]::-webkit-inner-spin-button { opacity:0.6; }
+  </style>
+</head>
+<body class="text-white antialiased">
+<div id="app"></div>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const RANKS = [
+  { name:'Recruit',    min:0,      icon:'🎯', color:'text-gray-400' },
+  { name:'Private',   min:500,    icon:'⚔️',  color:'text-green-400' },
+  { name:'Corporal',  min:1500,   icon:'🛡️',  color:'text-teal-400' },
+  { name:'Sergeant',  min:3500,   icon:'🔱',  color:'text-blue-400' },
+  { name:'Lieutenant',min:7000,   icon:'💎',  color:'text-indigo-400' },
+  { name:'Captain',   min:12000,  icon:'🌟',  color:'text-violet-400' },
+  { name:'Major',     min:20000,  icon:'⚡',  color:'text-purple-400' },
+  { name:'Colonel',   min:32000,  icon:'🔥',  color:'text-orange-400' },
+  { name:'General',   min:50000,  icon:'👑',  color:'text-yellow-400' },
+  { name:'Elite',     min:75000,  icon:'💫',  color:'text-amber-400' },
+  { name:'Legend',    min:100000, icon:'🏆',  color:'text-rose-400' },
+]
+
+const ACHIEVEMENTS = [
+  { id:'first-rep',    name:'First Rep',       desc:'Complete your first workout',   icon:'🏋️', rarity:'common',    xp:100,  check:s=>s.workoutCount>=1 },
+  { id:'ten-strong',   name:'Ten Strong',       desc:'Complete 10 workouts',          icon:'💪', rarity:'common',    xp:200,  check:s=>s.workoutCount>=10 },
+  { id:'century',      name:'Century',          desc:'Complete 100 workouts',         icon:'💯', rarity:'rare',      xp:1000, check:s=>s.workoutCount>=100 },
+  { id:'iron-will',    name:'Iron Will',        desc:'Complete 500 workouts',         icon:'🔩', rarity:'legendary', xp:5000, check:s=>s.workoutCount>=500 },
+  { id:'week-streak',  name:'Week Warrior',     desc:'7-day workout streak',          icon:'📅', rarity:'common',    xp:300,  check:s=>s.streak>=7 },
+  { id:'month-streak', name:'Monthly Machine',  desc:'30-day workout streak',         icon:'🗓️', rarity:'rare',      xp:1000, check:s=>s.streak>=30 },
+  { id:'225-club',     name:'225 Club',         desc:'Bench press 225 lbs',           icon:'🏅', rarity:'rare',      xp:500,  check:s=>getPR(s,'bench')>=225 },
+  { id:'315-bench',    name:'3-Plate Bench',    desc:'Bench press 315 lbs',           icon:'🥇', rarity:'epic',      xp:1000, check:s=>getPR(s,'bench')>=315 },
+  { id:'315-squat',    name:'3-Plate Squat',    desc:'Squat 315 lbs',                 icon:'🦵', rarity:'rare',      xp:500,  check:s=>getPR(s,'squat')>=315 },
+  { id:'405-squat',    name:'4-Plate Squat',    desc:'Squat 405 lbs',                 icon:'🦾', rarity:'epic',      xp:1000, check:s=>getPR(s,'squat')>=405 },
+  { id:'405-dead',     name:'4-Plate Pull',     desc:'Deadlift 405 lbs',              icon:'⛓️', rarity:'rare',      xp:500,  check:s=>getPR(s,'deadlift')>=405 },
+  { id:'500-dead',     name:'Half-Ton',         desc:'Deadlift 500 lbs',              icon:'💀', rarity:'legendary', xp:1500, check:s=>getPR(s,'deadlift')>=500 },
+  { id:'prog-done',    name:'Program Finisher', desc:'Complete a full program cycle', icon:'✅', rarity:'rare',      xp:500,  check:s=>s.programsCompleted>=1 },
+  { id:'first-pr',     name:'Personal Record',  desc:'Set your first PR',             icon:'📈', rarity:'common',    xp:200,  check:s=>s.prs.length>=1 },
+  { id:'centurion',    name:'Centurion',        desc:'Earn 10,000 total XP',          icon:'🏛️', rarity:'epic',      xp:500,  check:s=>s.xp>=10000 },
+]
+
+const SET_CONFIGS = {
+  strength: [
+    [{p:.65,r:5},{p:.75,r:5},{p:.85,r:5,a:true}],
+    [{p:.70,r:3},{p:.80,r:3},{p:.90,r:3,a:true}],
+    [{p:.75,r:5},{p:.85,r:3},{p:.95,r:1,a:true}],
+    [{p:.40,r:5},{p:.50,r:5},{p:.60,r:5}],
+  ],
+  hypertrophy: [
+    [{p:.65,r:12},{p:.70,r:10},{p:.75,r:8,a:true}],
+    [{p:.675,r:10},{p:.725,r:8},{p:.775,r:6,a:true}],
+    [{p:.70,r:10},{p:.75,r:8},{p:.80,r:6,a:true}],
+    [{p:.50,r:12},{p:.55,r:10},{p:.60,r:8}],
+  ],
+  fat_loss: [
+    [{p:.55,r:15},{p:.60,r:12},{p:.65,r:10,a:true}],
+    [{p:.55,r:15},{p:.60,r:12},{p:.65,r:10,a:true}],
+    [{p:.55,r:15},{p:.60,r:12},{p:.65,r:10,a:true}],
+    [{p:.45,r:15},{p:.50,r:12},{p:.55,r:10}],
+  ],
+}
+
+const ACCESSORIES = {
+  bench:    [{n:'Incline DB Press',s:3,r:'10-12'},{n:'Seated Cable Row',s:3,r:'12'},{n:'Cable Fly',s:3,r:'15'},{n:'Face Pulls',s:3,r:'15'},{n:'Tricep Pushdowns',s:3,r:'15'}],
+  squat:    [{n:'Romanian Deadlift',s:3,r:'10'},{n:'Leg Curl',s:3,r:'12'},{n:'Leg Press',s:3,r:'12'},{n:'Calf Raises',s:4,r:'15'},{n:'Walking Lunges',s:3,r:'12/leg'}],
+  ohp:      [{n:'Lateral Raises',s:4,r:'15'},{n:'Face Pulls',s:3,r:'15'},{n:'Front Raises',s:3,r:'12'},{n:'Rear Delt Fly',s:3,r:'15'},{n:'Tricep Dips',s:3,r:'AMRAP'}],
+  deadlift: [{n:'Pull-ups',s:3,r:'AMRAP'},{n:'DB Row',s:3,r:'12'},{n:'Good Mornings',s:3,r:'12'},{n:'Hyperextensions',s:3,r:'15'},{n:'Plank',s:3,r:'60s'}],
+}
+
+const LIFT_DAYS  = ['bench','squat','ohp','deadlift']
+const LIFT_LABEL = {bench:'Bench Press',squat:'Back Squat',ohp:'Overhead Press',deadlift:'Deadlift'}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const KEY = 'ascend-v1'
+let S = {
+  profile: null,
+  tm: {bench:0,squat:0,ohp:0,deadlift:0,benchSmith:null,squatSmith:null,ohpSmith:null,benchRatio:.85,squatRatio:.85,ohpRatio:.85},
+  program: null,
+  workoutLogs: [],
+  prs: [],
+  achievements: [],
+  xp: 0,
+  streak: 0,
+  lastWorkoutDate: null,
+  workoutCount: 0,
+  programsCompleted: 0,
+  activeWorkout: null,
+}
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch(e){} }
+function load() { try { const r=localStorage.getItem(KEY); if(r) S={...S,...JSON.parse(r)} } catch(e){} }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUSINESS LOGIC
+// ═══════════════════════════════════════════════════════════════════════════
+
+function uid() { return Math.random().toString(36).slice(2)+Date.now().toString(36) }
+function round25(n) { return Math.round(n/2.5)*2.5 }
+function epley(w,r) { return w*(1+r/30) }
+function calcTM(w,r) { return round25(epley(w,r)*0.9) }
+
+function getRank(xp) {
+  for(let i=RANKS.length-1;i>=0;i--) if(xp>=RANKS[i].min) return RANKS[i]
+  return RANKS[0]
+}
+function getNextRank(xp) {
+  for(let i=0;i<RANKS.length;i++) if(RANKS[i].min>xp) return RANKS[i]
+  return null
+}
+function getPR(state,lift) {
+  const list=state.prs.filter(p=>p.lift===lift)
+  return list.length?Math.max(...list.map(p=>p.weight)):0
+}
+
+function getEffectiveTM(lift) {
+  const pf=S.profile?.planetFitness
+  if(pf) {
+    if(lift==='bench')    return S.tm.benchSmith || round25((S.tm.bench||0)*S.tm.benchRatio)
+    if(lift==='squat')    return S.tm.squatSmith || round25((S.tm.squat||0)*S.tm.squatRatio)
+    if(lift==='ohp')      return S.tm.ohpSmith   || round25((S.tm.ohp||0)*S.tm.ohpRatio)
+    if(lift==='deadlift') return round25((S.tm.squat||0)*S.tm.squatRatio*1.5)
+  }
+  return S.tm[lift]||0
+}
+
+function getLiftName(lift) {
+  if(S.profile?.planetFitness) {
+    if(lift==='bench')    return 'Smith Bench Press'
+    if(lift==='squat')    return 'Smith Squat'
+    if(lift==='ohp')      return 'Smith OHP'
+    if(lift==='deadlift') return 'Leg Press'
+  }
+  return LIFT_LABEL[lift]||lift
+}
+
+function getSetConfig(type,week) {
+  const w=Math.min(week-1,3)
+  if(type==='powerbuilding') {
+    const base=week%2===1?SET_CONFIGS.strength:SET_CONFIGS.hypertrophy
+    return base[Math.min(w,base.length-1)]
+  }
+  return (SET_CONFIGS[type]||SET_CONFIGS.strength)[w]
+}
+
+function makeSets(lift,type,week) {
+  const tm=getEffectiveTM(lift)
+  return getSetConfig(type,week).map(s=>({
+    weight:round25(tm*s.p), reps:s.r, amrap:!!s.a,
+    actualWeight:round25(tm*s.p), actualReps:s.r, done:false
+  }))
+}
+
+function getCurrentLift() {
+  if(!S.program) return null
+  return LIFT_DAYS[(S.program.day-1)%4]
+}
+
+function addXP(n) { S.xp+=n }
+
+function updateStreak() {
+  const today=new Date().toDateString()
+  if(S.lastWorkoutDate===today) return
+  const yesterday=new Date(Date.now()-86400000).toDateString()
+  S.streak=(S.lastWorkoutDate===yesterday)?S.streak+1:1
+  S.lastWorkoutDate=today
+}
+
+function advanceProgram() {
+  if(!S.program) return
+  const {week,day}=S.program
+  if(day>=4) {
+    if(week>=4) {
+      S.programsCompleted++
+      S.program={...S.program,week:1,day:1}
+      addXP(500)
+      toast('Program cycle complete! +500 XP 🎉')
+    } else {
+      S.program={...S.program,week:week+1,day:1}
+    }
+  } else {
+    S.program={...S.program,day:day+1}
+  }
+}
+
+function checkPR(lift,weight,reps) {
+  const est=epley(weight,reps)
+  const existing=S.prs.find(p=>p.lift===lift)
+  const existingEst=existing?epley(existing.weight,existing.reps):0
+  if(est>existingEst||weight>(existing?.weight||0)) {
+    S.prs=S.prs.filter(p=>p.lift!==lift)
+    S.prs.push({lift,weight,reps,date:new Date().toISOString()})
+    addXP(150)
+    toast(`New PR on ${LIFT_LABEL[lift]}! +150 XP 🎉`)
+  }
+}
+
+function checkAchievements() {
+  const newOnes=[]
+  for(const a of ACHIEVEMENTS) {
+    if(!S.achievements.includes(a.id)&&a.check(S)) {
+      S.achievements.push(a.id)
+      addXP(a.xp)
+      newOnes.push(a)
+    }
+  }
+  if(newOnes.length) toast('Achievement unlocked: '+newOnes.map(a=>a.name).join(', ')+' 🏆')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROUTER
+// ═══════════════════════════════════════════════════════════════════════════
+
+function nav(page) { location.hash=page }
+function getPage() { return location.hash.slice(1)||'landing' }
+window.addEventListener('hashchange',render)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toast(msg,ms=3500) {
+  const el=document.createElement('div')
+  el.className='toast-anim fixed bottom-20 left-1/2 -translate-x-1/2 bg-violet-700 text-white text-sm px-4 py-2.5 rounded-full shadow-xl z-50 max-w-xs text-center whitespace-nowrap'
+  el.textContent=msg
+  document.body.appendChild(el)
+  setTimeout(()=>el.remove(),ms)
+}
+
+function setHTML(html) { document.getElementById('app').innerHTML=html }
+
+function bottomNav(active) {
+  const tabs=[
+    {p:'dashboard',i:'🏠',l:'Home'},
+    {p:'programs', i:'📋',l:'Programs'},
+    {p:'workout',  i:'💪',l:'Workout'},
+    {p:'analytics',i:'📊',l:'Stats'},
+    {p:'profile',  i:'👤',l:'Profile'},
+  ]
+  return `<nav class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 flex z-40 safe-area-pb">
+    ${tabs.map(t=>`
+      <button onclick="nav('${t.p}')" class="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs transition-colors ${active===t.p?'nav-active text-violet-400':'text-gray-500'}">
+        <span class="text-lg leading-none">${t.i}</span>${t.l}
+      </button>`).join('')}
+  </nav>`
+}
+
+function shell(title,body,active,subtitle='') {
+  return `
+    <div class="min-h-screen bg-gray-950 pb-24">
+      <header class="sticky top-0 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-4 py-3 z-30">
+        <div class="text-lg font-bold text-white">${title}</div>
+        ${subtitle?`<div class="text-xs text-gray-500">${subtitle}</div>`:''}
+      </header>
+      <main class="px-4 py-4 max-w-xl mx-auto space-y-4">${body}</main>
+    </div>
+    ${bottomNav(active)}`
+}
+
+function card(body,cls='') {
+  return `<div class="bg-gray-900 border border-gray-800 rounded-xl p-4 ${cls}">${body}</div>`
+}
+
+function btn(label,onclick,variant='primary',cls='') {
+  const v={
+    primary:'bg-violet-600 hover:bg-violet-500 text-white',
+    secondary:'bg-gray-800 hover:bg-gray-700 text-gray-200',
+    success:'bg-emerald-700 hover:bg-emerald-600 text-white',
+    danger:'bg-red-900/60 hover:bg-red-800/80 text-red-300 border border-red-800',
+    outline:'border border-violet-600 text-violet-400 hover:bg-violet-900/30',
+  }[variant]||'bg-violet-600 text-white'
+  return `<button onclick="${onclick}" class="w-full py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors ${v} ${cls}">${label}</button>`
+}
+
+function inp(label,id,type='text',val='',step='') {
+  return `<div class="space-y-1">
+    <label class="text-xs text-gray-400 font-medium">${label}</label>
+    <input id="${id}" type="${type}" value="${val}" ${step?`step="${step}"`:''}
+      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500"/>
+  </div>`
+}
+
+function sel(label,id,opts,selected='') {
+  return `<div class="space-y-1">
+    <label class="text-xs text-gray-400 font-medium">${label}</label>
+    <select id="${id}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500">
+      ${opts.map(o=>`<option value="${o.v}"${selected===o.v?' selected':''}>${o.l}</option>`).join('')}
+    </select>
+  </div>`
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGES
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderLanding() {
+  setHTML(`
+    <div class="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6 py-16 text-center">
+      <div class="text-7xl mb-4">⚡</div>
+      <h1 class="text-5xl font-black text-white mb-2 tracking-tight">ASCEND</h1>
+      <p class="text-gray-400 text-lg mb-10">Train Smarter. Progress Faster. Rank Higher.</p>
+      <div class="grid grid-cols-2 gap-3 w-full max-w-xs mb-10">
+        ${[['📊','5/3/1 Programming','Proven strength cycles'],['🏆','11 Rank Tiers','Earn XP, level up'],['💪','Planet Fitness','Smith machine support'],['📈','Track PRs','Streaks & analytics']].map(([i,t,s])=>`
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 text-left">
+            <div class="text-2xl mb-1">${i}</div>
+            <div class="text-sm font-semibold text-white">${t}</div>
+            <div class="text-xs text-gray-500">${s}</div>
+          </div>`).join('')}
+      </div>
+      <div class="w-full max-w-xs space-y-3">
+        ${btn('Get Started →','nav(\'signup\')')}
+        ${btn('Continue Training','nav(\'dashboard\')','secondary')}
+      </div>
+    </div>`)
+}
+
+// ── Signup ────────────────────────────────────────────────────────────────
+
+let _pfOn = false
+function renderSignup() {
+  _pfOn = false
+  setHTML(`
+    <div class="min-h-screen bg-gray-950 px-4 py-8 max-w-md mx-auto">
+      <button onclick="nav('landing')" class="text-gray-500 text-sm mb-6 hover:text-gray-300">← Back</button>
+      <h2 class="text-2xl font-bold text-white mb-1">Create Profile</h2>
+      <p class="text-gray-500 text-sm mb-6">Step 1 of 2 — Tell us about yourself.</p>
+      <div class="space-y-4">
+        ${inp('Display Name *','su-name')}
+        ${sel('Experience Level *','su-exp',[
+          {v:'beginner',l:'Beginner (< 1 year)'},
+          {v:'intermediate',l:'Intermediate (1–3 years)'},
+          {v:'advanced',l:'Advanced (3+ years)'},
+        ])}
+        <div class="grid grid-cols-3 gap-3">
+          ${inp('Weight','su-wt','number','','0.5')}
+          ${inp('Height','su-ht','number','','1')}
+          ${inp('Age','su-age','number','','1')}
+        </div>
+        <p class="text-xs text-gray-600">Weight in kg · Height in cm</p>
+        <label class="flex items-center gap-3 cursor-pointer" onclick="suTogglePF()">
+          <div id="su-pftog" class="w-10 h-6 rounded-full bg-gray-700 flex items-center px-1 shrink-0 transition-colors">
+            <div id="su-pfthumb" class="w-4 h-4 bg-white rounded-full transition-transform"></div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-300 font-medium">Planet Fitness Mode</div>
+            <div class="text-xs text-gray-500">Uses Smith machine for main lifts</div>
+          </div>
+        </label>
+        ${btn('Continue →','handleSignup()','primary','mt-2')}
+      </div>
+    </div>`)
+}
+
+function suTogglePF() {
+  _pfOn=!_pfOn
+  document.getElementById('su-pftog').className=`w-10 h-6 rounded-full flex items-center px-1 shrink-0 transition-colors ${_pfOn?'bg-violet-600':'bg-gray-700'}`
+  document.getElementById('su-pfthumb').className=`w-4 h-4 bg-white rounded-full transition-transform ${_pfOn?'translate-x-4':''}`
+}
+
+function handleSignup() {
+  const name=document.getElementById('su-name')?.value.trim()
+  if(!name){toast('Please enter a display name');return}
+  S.profile={
+    name,
+    experience:document.getElementById('su-exp')?.value||'beginner',
+    weightKg:parseFloat(document.getElementById('su-wt')?.value)||null,
+    heightCm:parseFloat(document.getElementById('su-ht')?.value)||null,
+    age:parseInt(document.getElementById('su-age')?.value)||null,
+    planetFitness:_pfOn,
+    createdAt:new Date().toISOString(),
+  }
+  S.xp=0; S.streak=0; S.workoutCount=0
+  save()
+  nav('calculator')
+}
+
+// ── Calculator ────────────────────────────────────────────────────────────
+
+function renderCalculator() {
+  const onboard=!S.tm.bench&&!S.tm.squat&&!S.tm.ohp&&!S.tm.deadlift
+  setHTML(`
+    <div class="min-h-screen bg-gray-950 pb-24">
+      <header class="sticky top-0 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-4 py-3 z-30">
+        <div class="text-lg font-bold text-white">Weight Calculator</div>
+        <div class="text-xs text-gray-500">Enter your best lift → we'll set your Training Max (90% of 1RM)</div>
+      </header>
+      <div class="px-4 py-4 max-w-xl mx-auto space-y-4">
+        ${onboard?`<div class="bg-violet-900/30 border border-violet-800 rounded-xl px-4 py-3 text-sm text-violet-300">Step 2 of 2 — Enter the heaviest weight you've done and how many reps you got.</div>`:''}
+        ${['bench','squat','ohp','deadlift'].map(lift=>`
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+            <h3 class="font-semibold text-white">${LIFT_LABEL[lift]}</h3>
+            <div class="grid grid-cols-2 gap-3">
+              ${inp('Weight (lbs)',`c-${lift}-w`,'number','','2.5')}
+              ${inp('Reps',`c-${lift}-r`,'number','','1')}
+            </div>
+            <div id="c-${lift}-out" class="text-xs text-gray-600 h-4"></div>
+          </div>`).join('')}
+        ${S.profile?.planetFitness?`
+          <div class="bg-amber-950/40 border border-amber-800 rounded-xl p-4 space-y-3">
+            <h3 class="font-semibold text-amber-400">Smith Machine Overrides <span class="text-xs font-normal text-gray-500">(optional)</span></h3>
+            ${['bench','squat','ohp'].map(l=>`${inp(`Smith ${LIFT_LABEL[l]} TM (lbs)`,`c-smith-${l}`,'number','','2.5')}`).join('')}
+          </div>`:''}
+        ${btn('Calculate & Save','runCalc()','primary')}
+        ${!onboard?btn('Back','nav(\'profile\')','secondary','mt-1'):''}
+      </div>
+    </div>
+    ${S.profile?bottomNav(''):''}`)
+
+  ;['bench','squat','ohp','deadlift'].forEach(lift=>{
+    const wEl=document.getElementById(`c-${lift}-w`)
+    const rEl=document.getElementById(`c-${lift}-r`)
+    const out=document.getElementById(`c-${lift}-out`)
+    const upd=()=>{
+      const w=parseFloat(wEl.value),r=parseInt(rEl.value)
+      if(w>0&&r>0) {
+        const tm=calcTM(w,r)
+        out.textContent=`1RM ≈ ${round25(epley(w,r))} lbs → Training Max: ${tm} lbs`
+        out.className='text-xs text-violet-400 h-4'
+      }
+    }
+    wEl?.addEventListener('input',upd); rEl?.addEventListener('input',upd)
+  })
+}
+
+function runCalc() {
+  for(const lift of ['bench','squat','ohp','deadlift']) {
+    const w=parseFloat(document.getElementById(`c-${lift}-w`)?.value)
+    const r=parseInt(document.getElementById(`c-${lift}-r`)?.value)
+    if(w>0&&r>0) S.tm[lift]=calcTM(w,r)
+  }
+  if(S.profile?.planetFitness) {
+    for(const l of ['bench','squat','ohp']) {
+      const v=parseFloat(document.getElementById(`c-smith-${l}`)?.value)
+      if(v>0) S.tm[`${l}Smith`]=v
+    }
+  }
+  save()
+  toast('Training maxes saved!')
+  if(!S.program) { toast('Now create a program to start training!',4000); nav('programs') }
+  else nav('profile')
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+
+function renderDashboard() {
+  const rank=getRank(S.xp)
+  const next=getNextRank(S.xp)
+  const pct=next?Math.round(((S.xp-rank.min)/(next.min-rank.min))*100):100
+  const lift=getCurrentLift()
+  const recentLogs=[...S.workoutLogs].reverse().slice(0,3)
+
+  setHTML(shell(
+    `${rank.icon} ${S.profile?.name||'Athlete'}`,
+    `
+    <div class="bg-gradient-to-br from-gray-900 via-violet-950/20 to-gray-900 border border-violet-800/40 rounded-xl p-4">
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <div class="text-2xl font-black ${rank.color} rank-glow">${rank.icon} ${rank.name}</div>
+          <div class="text-xs text-gray-500 mt-0.5">${S.xp.toLocaleString()} XP</div>
+        </div>
+        <div class="text-right">
+          <div class="text-xl font-bold text-white">${S.streak}</div>
+          <div class="text-xs text-gray-500">day streak</div>
+        </div>
+      </div>
+      <div class="space-y-1">
+        <div class="flex justify-between text-xs text-gray-500 mb-1">
+          <span>${rank.name}</span><span>${next?next.name:'MAX'}</span>
+        </div>
+        <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+          <div class="h-full bg-gradient-to-r from-violet-600 to-purple-400 rounded-full" style="width:${pct}%"></div>
+        </div>
+        <div class="text-right text-xs text-gray-500 mt-1">${next?`${(next.min-S.xp).toLocaleString()} XP to ${next.name}`:'Max rank achieved!'}</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3">
+      ${[['🏋️',S.workoutCount,'Workouts'],['🏆',S.achievements.length,'Achievements'],['📈',S.prs.length,'PRs']].map(([i,v,l])=>`
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+          <div class="text-xl">${i}</div>
+          <div class="text-xl font-bold text-white">${v}</div>
+          <div class="text-xs text-gray-500">${l}</div>
+        </div>`).join('')}
+    </div>
+
+    ${S.program?`
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide font-medium">${S.program.name} · Wk ${S.program.week}, Day ${S.program.day}</div>
+            <div class="text-white font-bold text-lg">${lift?getLiftName(lift):'Rest'}</div>
+          </div>
+          <span class="text-2xl">💪</span>
+        </div>
+        ${btn('Start Workout',"nav('workout')")}
+      </div>`:`
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+        <div class="text-3xl mb-2">📋</div>
+        <div class="text-white font-semibold mb-1">No Active Program</div>
+        <div class="text-sm text-gray-500 mb-3">Create a program to start training</div>
+        ${btn('Create Program',"nav('programs')",'outline')}
+      </div>`}
+
+    ${recentLogs.length?`
+      <div>
+        <h3 class="text-sm font-semibold text-gray-400 mb-2">Recent Workouts</h3>
+        ${recentLogs.map(log=>{
+          const diff=Math.floor((Date.now()-new Date(log.date))/86400000)
+          const when=diff===0?'Today':diff===1?'Yesterday':`${diff}d ago`
+          const done=log.sets.filter(s=>s.completed).length
+          return `<div class="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between mb-2">
+            <div>
+              <div class="text-sm font-medium text-white">${LIFT_LABEL[log.lift]||log.lift}</div>
+              <div class="text-xs text-gray-500">${when} · ${done}/${log.sets.length} sets</div>
+            </div>
+            <div class="text-xs text-violet-400 font-medium">+${log.xpEarned} XP</div>
+          </div>`
+        }).join('')}
+      </div>`:''}
+    `,
+    'dashboard'
+  ))
+}
+
+// ── Programs ──────────────────────────────────────────────────────────────
+
+function renderPrograms() {
+  setHTML(shell('Programs',`
+    ${S.program?`
+      <div class="bg-gradient-to-br from-violet-900/30 to-gray-900 border border-violet-800/50 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs text-violet-400 font-medium uppercase tracking-wide">Active Program</div>
+            <div class="text-white font-bold text-lg">${S.program.name}</div>
+          </div>
+          <span class="bg-violet-600 text-white text-xs px-2 py-1 rounded-full font-medium">Week ${S.program.week}/4</span>
+        </div>
+        <div class="grid grid-cols-4 gap-1">
+          ${LIFT_DAYS.map((l,i)=>`
+            <div class="text-center py-2 rounded-lg text-xs font-medium ${i===(S.program.day-1)%4?'bg-violet-600 text-white':'bg-gray-800 text-gray-500'}">
+              ${l[0].toUpperCase()+l.slice(1)}
+            </div>`).join('')}
+        </div>
+        ${btn('Start Today\'s Workout',"nav('workout')")}
+        <button onclick="resetProgram()" class="text-xs text-red-500 hover:text-red-400 w-full text-center py-1 mt-1">Reset to Week 1</button>
+      </div>`:''}
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+      <h3 class="font-semibold text-white">${S.program?'Switch Program':'Create Program'}</h3>
+      ${inp('Program Name','prog-name','text',S.program?'':'My Ascend Program')}
+      ${sel('Training Type','prog-type',[
+        {v:'strength',l:'Strength (5/3/1) — Heavy, low reps'},
+        {v:'hypertrophy',l:'Hypertrophy — Moderate, muscle growth'},
+        {v:'powerbuilding',l:'Powerbuilding — Best of both'},
+        {v:'fat_loss',l:'Fat Loss — High reps, metabolic'},
+      ])}
+      ${btn('Create Program','createProgram()',S.program?'secondary':'primary')}
+    </div>
+
+    <div class="space-y-2">
+      ${[
+        {i:'🏋️',t:'Strength (5/3/1)',d:"Jim Wendler's proven strength system. 4-week cycles with progressive overload. Best for powerlifting goals."},
+        {i:'💪',t:'Hypertrophy',d:'Volume-focused training for maximum muscle growth. Moderate weights, higher reps, more sets.'},
+        {i:'⚡',t:'Powerbuilding',d:'Alternates strength and hypertrophy weeks. Best all-around development for size and strength.'},
+        {i:'🔥',t:'Fat Loss',d:'Higher rep ranges elevate heart rate while preserving muscle. Lighter weights, fast pace.'},
+      ].map(p=>`
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span>${p.i}</span><span class="text-sm font-semibold text-white">${p.t}</span>
+          </div>
+          <p class="text-xs text-gray-500">${p.d}</p>
+        </div>`).join('')}
+    </div>
+  `,'programs'))
+}
+
+function createProgram() {
+  const name=(document.getElementById('prog-name')?.value.trim())||'My Program'
+  const type=document.getElementById('prog-type')?.value||'strength'
+  S.program={id:uid(),name,type,week:1,day:1,createdAt:new Date().toISOString()}
+  save()
+  toast(`"${name}" created!`)
+  nav('workout')
+}
+
+function resetProgram() {
+  if(confirm('Reset program to Week 1, Day 1?')) {
+    S.program={...S.program,week:1,day:1}
+    save(); toast('Program reset'); render()
+  }
+}
+
+// ── Workout Preview ───────────────────────────────────────────────────────
+
+function renderWorkout() {
+  if(!S.program) {
+    setHTML(shell('Workout',`
+      <div class="text-center py-16">
+        <div class="text-5xl mb-4">📋</div>
+        <div class="text-white font-bold text-lg mb-2">No Active Program</div>
+        <div class="text-gray-500 text-sm mb-6">Create a program to get your workouts</div>
+        ${btn('Go to Programs',"nav('programs')")}
+      </div>`,'workout'))
+    return
+  }
+  if(S.activeWorkout) { renderActiveWorkout(); return }
+
+  const lift=getCurrentLift()
+  const liftName=getLiftName(lift)
+  const sets=makeSets(lift,S.program.type,S.program.week)
+  const tm=getEffectiveTM(lift)
+  const acc=ACCESSORIES[lift]||[]
+
+  setHTML(shell(
+    'Workout Preview',
+    `
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">${S.program.name} · Week ${S.program.week}, Day ${S.program.day}</div>
+      <div class="text-white font-bold text-xl">${liftName}</div>
+      <div class="text-xs text-gray-500 mt-0.5">Training Max: ${tm} lbs</div>
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-800 text-sm font-semibold text-gray-400">Main Sets</div>
+      ${sets.map((s,i)=>`
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800 last:border-0">
+          <span class="text-sm text-gray-400">Set ${i+1}</span>
+          <span class="font-bold text-white">${s.weight} lbs</span>
+          <span class="text-sm ${s.amrap?'text-violet-400 font-semibold':'text-gray-300'}">${s.reps} reps${s.amrap?' (AMRAP)':''}</span>
+        </div>`).join('')}
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-800 text-sm font-semibold text-gray-400">Accessories</div>
+      ${acc.map(a=>`
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800 last:border-0">
+          <span class="text-sm text-gray-300">${a.n}</span>
+          <span class="text-xs text-gray-500">${a.s}×${a.r}</span>
+        </div>`).join('')}
+    </div>
+
+    ${btn('Start Workout 💪','startWorkout()')}
+    `,
+    'workout'
+  ))
+}
+
+function startWorkout() {
+  const lift=getCurrentLift()
+  S.activeWorkout={
+    lift,
+    sets:makeSets(lift,S.program.type,S.program.week),
+    accessories:(ACCESSORIES[lift]||[]).map(a=>({...a,done:false})),
+    startTime:Date.now(),
+  }
+  save(); renderActiveWorkout()
+}
+
+// ── Active Workout ────────────────────────────────────────────────────────
+
+function renderActiveWorkout() {
+  const w=S.activeWorkout
+  if(!w){nav('workout');return}
+  const liftName=getLiftName(w.lift)
+  const elapsed=Math.floor((Date.now()-w.startTime)/60000)
+  const mainDone=w.sets.filter(s=>s.done).length
+
+  setHTML(`
+    <div class="min-h-screen bg-gray-950 pb-8">
+      <header class="sticky top-0 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-4 py-3 flex items-center justify-between z-30">
+        <div>
+          <div class="text-lg font-bold text-white">${liftName}</div>
+          <div class="text-xs text-gray-500">${elapsed}m elapsed · ${mainDone}/${w.sets.length} main sets</div>
+        </div>
+        <button onclick="cancelWorkout()" class="text-sm text-gray-500 hover:text-red-400 px-3 py-1">Cancel</button>
+      </header>
+      <div class="px-4 py-4 max-w-xl mx-auto space-y-4">
+
+        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-800 text-sm font-semibold text-gray-400">Main Sets</div>
+          ${w.sets.map((s,i)=>`
+            <div class="${s.done?'set-done':''} p-4 border-b border-gray-800 last:border-0">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-semibold ${s.done?'text-emerald-400':'text-white'}">Set ${i+1}</span>
+                  ${s.amrap?`<span class="text-xs bg-violet-900/60 text-violet-300 px-2 py-0.5 rounded-full amrap-badge">AMRAP</span>`:''}
+                </div>
+                <button onclick="toggleSet(${i})" class="text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${s.done?'bg-emerald-800 text-emerald-300':'bg-gray-800 text-gray-300 hover:bg-violet-800 hover:text-violet-200'}">
+                  ${s.done?'✓ Done':'Mark Done'}
+                </button>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-1">
+                  <label class="text-xs text-gray-500">Weight (lbs)</label>
+                  <input type="number" step="2.5" value="${s.actualWeight}"
+                    onchange="setWeight(${i},this.value)"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500"/>
+                </div>
+                <div class="space-y-1">
+                  <label class="text-xs text-gray-500">Reps${s.amrap?' (actual)':''}</label>
+                  <input type="number" step="1" value="${s.actualReps}"
+                    onchange="setReps(${i},this.value)"
+                    class="w-full bg-gray-800 border ${s.amrap?'border-violet-700':'border-gray-700'} rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500"/>
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>
+
+        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-800 text-sm font-semibold text-gray-400">Accessories</div>
+          ${w.accessories.map((a,i)=>`
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800 last:border-0 ${a.done?'opacity-40':''}">
+              <div>
+                <div class="text-sm ${a.done?'text-gray-500 line-through':'text-white'}">${a.n}</div>
+                <div class="text-xs text-gray-500">${a.s}×${a.r}</div>
+              </div>
+              <button onclick="toggleAcc(${i})" class="text-xs px-3 py-1.5 rounded-full font-medium ${a.done?'bg-emerald-800 text-emerald-300':'bg-gray-800 text-gray-300'}">
+                ${a.done?'✓':'Done'}
+              </button>
+            </div>`).join('')}
+        </div>
+
+        ${btn('Finish Workout 🎉','finishWorkout()','success')}
+      </div>
+    </div>`)
+}
+
+function toggleSet(i) {
+  if(!S.activeWorkout)return
+  S.activeWorkout.sets[i].done=!S.activeWorkout.sets[i].done
+  save(); renderActiveWorkout()
+}
+function setWeight(i,v) { if(S.activeWorkout){S.activeWorkout.sets[i].actualWeight=parseFloat(v)||0;save()} }
+function setReps(i,v)   { if(S.activeWorkout){S.activeWorkout.sets[i].actualReps=parseInt(v)||0;save()} }
+function toggleAcc(i)   {
+  if(!S.activeWorkout)return
+  S.activeWorkout.accessories[i].done=!S.activeWorkout.accessories[i].done
+  save(); renderActiveWorkout()
+}
+function cancelWorkout() {
+  if(confirm('Cancel this workout? Progress will be lost.')) {
+    S.activeWorkout=null; save(); nav('workout')
+  }
+}
+
+function finishWorkout() {
+  const w=S.activeWorkout
+  if(!w)return
+  const done=w.sets.filter(s=>s.done)
+  if(!done.length){toast('Complete at least one set first!');return}
+
+  const xpEarned=50+done.length*10
+  addXP(xpEarned)
+  S.workoutCount++
+  updateStreak()
+
+  S.workoutLogs.push({
+    id:uid(),
+    date:new Date().toISOString(),
+    lift:w.lift,
+    sets:w.sets.map(s=>({weight:s.actualWeight,reps:s.actualReps,completed:s.done})),
+    xpEarned,
+    duration:Math.floor((Date.now()-w.startTime)/60000),
+  })
+
+  // Check PR: best completed set
+  const best=done.reduce((b,s)=>epley(s.actualWeight,s.actualReps)>epley(b.actualWeight,b.actualReps)?s:b,done[0])
+  checkPR(w.lift,best.actualWeight,best.actualReps)
+
+  advanceProgram()
+  checkAchievements()
+
+  S.activeWorkout=null
+  save()
+  toast(`Workout complete! +${xpEarned} XP 💪`)
+  nav('dashboard')
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────
+
+function renderAnalytics() {
+  const days=[],vols=[]
+  for(let i=6;i>=0;i--) {
+    const d=new Date(Date.now()-i*86400000)
+    days.push(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()])
+    const ds=d.toDateString()
+    const logs=S.workoutLogs.filter(l=>new Date(l.date).toDateString()===ds)
+    vols.push(logs.reduce((sum,l)=>sum+l.sets.filter(s=>s.completed).reduce((s2,s)=>s2+s.weight*s.reps,0),0))
+  }
+
+  setHTML(shell('Analytics',`
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <h3 class="text-sm font-semibold text-gray-400 mb-3">Personal Records</h3>
+      ${S.prs.length===0?'<p class="text-xs text-gray-600 text-center py-2">No PRs yet. Finish a workout to set your first!</p>':
+        S.prs.map(pr=>`
+          <div class="flex items-center justify-between py-2.5 border-b border-gray-800 last:border-0">
+            <div>
+              <div class="text-sm font-medium text-white">${LIFT_LABEL[pr.lift]}</div>
+              <div class="text-xs text-gray-500">${pr.weight} lbs × ${pr.reps} reps</div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-bold text-violet-400">${Math.round(epley(pr.weight,pr.reps))} lbs</div>
+              <div class="text-xs text-gray-500">est. 1RM</div>
+            </div>
+          </div>`).join('')}
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <h3 class="text-sm font-semibold text-gray-400 mb-3">Volume — Last 7 Days</h3>
+      <canvas id="vchart" height="110"></canvas>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      ${[['Total Workouts',S.workoutCount],['Current Streak',`${S.streak}d`],['Total XP',S.xp.toLocaleString()],['Achievements',`${S.achievements.length}/${ACHIEVEMENTS.length}`]].map(([l,v])=>`
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+          <div class="text-xl font-bold text-white">${v}</div>
+          <div class="text-xs text-gray-500">${l}</div>
+        </div>`).join('')}
+    </div>
+
+    ${S.workoutLogs.length===0?'':
+      `<div>
+        <h3 class="text-sm font-semibold text-gray-400 mb-2">History</h3>
+        ${[...S.workoutLogs].reverse().slice(0,10).map(log=>{
+          const done=log.sets.filter(s=>s.completed)
+          const vol=done.reduce((s,x)=>s+x.weight*x.reps,0)
+          return `<div class="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between mb-2">
+            <div>
+              <div class="text-sm font-medium text-white">${LIFT_LABEL[log.lift]||log.lift}</div>
+              <div class="text-xs text-gray-500">${new Date(log.date).toLocaleDateString()} · ${log.duration||'?'}min · ${done.length} sets</div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-violet-400">+${log.xpEarned} XP</div>
+              <div class="text-xs text-gray-500">${Math.round(vol).toLocaleString()} vol</div>
+            </div>
+          </div>`
+        }).join('')}
+      </div>`}
+  `,'analytics'))
+
+  setTimeout(()=>{
+    const ctx=document.getElementById('vchart')
+    if(ctx&&typeof Chart!=='undefined') {
+      new Chart(ctx,{
+        type:'bar',
+        data:{labels:days,datasets:[{data:vols,backgroundColor:'rgba(139,92,246,0.65)',borderColor:'rgba(139,92,246,1)',borderWidth:1,borderRadius:4}]},
+        options:{
+          plugins:{legend:{display:false}},
+          scales:{
+            x:{ticks:{color:'#6b7280'},grid:{color:'#111827'}},
+            y:{ticks:{color:'#6b7280'},grid:{color:'#111827'}},
+          }
+        }
+      })
+    }
+  },80)
+}
+
+// ── Achievements ──────────────────────────────────────────────────────────
+
+function renderAchievements() {
+  const rc={common:'border-gray-700',rare:'border-blue-800',epic:'border-purple-800',legendary:'border-amber-700'}
+  const tc={common:'text-gray-400',rare:'text-blue-400',epic:'text-purple-400',legendary:'text-amber-400'}
+
+  setHTML(shell('Achievements',`
+    <div class="text-center py-2">
+      <div class="text-4xl font-black text-white">${S.achievements.length}<span class="text-2xl text-gray-500">/${ACHIEVEMENTS.length}</span></div>
+      <div class="text-xs text-gray-500 mt-1">achievements unlocked</div>
+    </div>
+    <div class="space-y-2">
+      ${ACHIEVEMENTS.map(a=>{
+        const unlocked=S.achievements.includes(a.id)
+        return `<div class="border ${unlocked?rc[a.rarity]:'border-gray-800'} rounded-xl px-4 py-3 flex items-center gap-3 ${unlocked?'':'opacity-40'}">
+          <div class="text-2xl">${a.icon}</div>
+          <div class="flex-1">
+            <div class="text-sm font-semibold ${unlocked?'text-white':'text-gray-600'}">${a.name}</div>
+            <div class="text-xs text-gray-500">${a.desc}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-xs font-medium ${unlocked?'text-violet-400':'text-gray-700'}">+${a.xp} XP</div>
+            <div class="text-xs capitalize ${unlocked?tc[a.rarity]:'text-gray-700'}">${a.rarity}</div>
+          </div>
+        </div>`
+      }).join('')}
+    </div>
+  `,'achievements'))
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────
+
+let _profPF = null
+function renderProfile() {
+  _profPF = null
+  const rank=getRank(S.xp)
+  const pf=S.profile?.planetFitness||false
+
+  setHTML(shell('Profile',`
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4">
+      <div class="text-4xl">${rank.icon}</div>
+      <div>
+        <div class="text-lg font-black ${rank.color}">${rank.name}</div>
+        <div class="text-sm text-gray-400">${S.xp.toLocaleString()} XP · ${S.workoutCount} workouts</div>
+        <div class="text-xs text-gray-500">${S.streak} day streak</div>
+      </div>
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+      <h3 class="text-sm font-semibold text-white">Personal Info</h3>
+      ${inp('Display Name','p-name','text',S.profile?.name||'')}
+      <div class="grid grid-cols-3 gap-3">
+        ${inp('Weight (kg)','p-wt','number',S.profile?.weightKg||'','0.5')}
+        ${inp('Height (cm)','p-ht','number',S.profile?.heightCm||'','1')}
+        ${inp('Age','p-age','number',S.profile?.age||'','1')}
+      </div>
+      ${sel('Experience','p-exp',[
+        {v:'beginner',l:'Beginner (< 1 year)'},
+        {v:'intermediate',l:'Intermediate (1–3 years)'},
+        {v:'advanced',l:'Advanced (3+ years)'},
+      ],S.profile?.experience||'beginner')}
+      <label class="flex items-center gap-3 cursor-pointer" onclick="toggleProfPF()">
+        <div id="p-pftog" class="w-10 h-6 rounded-full ${pf?'bg-violet-600':'bg-gray-700'} flex items-center px-1 shrink-0 transition-colors">
+          <div id="p-pfthumb" class="w-4 h-4 bg-white rounded-full transition-transform ${pf?'translate-x-4':''}"></div>
+        </div>
+        <span class="text-sm text-gray-300">Planet Fitness Mode</span>
+      </label>
+      ${btn('Save Profile','saveProfile()')}
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+      <h3 class="text-sm font-semibold text-white">Training Maxes (lbs)</h3>
+      <p class="text-xs text-gray-500">Your TM = 90% of 1RM. <span onclick="nav('calculator')" class="text-violet-400 cursor-pointer hover:underline">Use calculator</span> if unsure.</p>
+      ${inp('Bench Press TM','p-bench','number',S.tm.bench||'','2.5')}
+      ${inp('Back Squat TM','p-squat','number',S.tm.squat||'','2.5')}
+      ${inp('Deadlift TM','p-dead','number',S.tm.deadlift||'','2.5')}
+      ${inp('Overhead Press TM','p-ohp','number',S.tm.ohp||'','2.5')}
+      ${pf?`
+        <div class="pt-2 border-t border-gray-800 space-y-3">
+          <p class="text-xs text-amber-400 font-medium">Smith Machine TMs (optional):</p>
+          ${inp('Smith Bench TM','p-bs','number',S.tm.benchSmith||'','2.5')}
+          ${inp('Smith Squat TM','p-ss','number',S.tm.squatSmith||'','2.5')}
+          ${inp('Smith OHP TM','p-os','number',S.tm.ohpSmith||'','2.5')}
+        </div>`:''}
+      ${btn('Save Training Maxes','saveTM()')}
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      ${btn('Achievements 🏆',"nav('achievements')",'secondary')}
+      ${btn('Calculator 🔢',"nav('calculator')",'secondary')}
+    </div>
+
+    <div class="border border-red-900/60 rounded-xl p-4 space-y-3">
+      <h3 class="text-sm font-semibold text-red-400">Danger Zone</h3>
+      ${btn('Reset All Data','confirmReset()','danger')}
+    </div>
+  `,'profile'))
+}
+
+function toggleProfPF() {
+  if(_profPF===null) _profPF=S.profile?.planetFitness||false
+  _profPF=!_profPF
+  document.getElementById('p-pftog').className=`w-10 h-6 rounded-full flex items-center px-1 shrink-0 transition-colors ${_profPF?'bg-violet-600':'bg-gray-700'}`
+  document.getElementById('p-pfthumb').className=`w-4 h-4 bg-white rounded-full transition-transform ${_profPF?'translate-x-4':''}`
+}
+
+function saveProfile() {
+  if(!S.profile)return
+  const pf=_profPF!==null?_profPF:(S.profile.planetFitness||false)
+  S.profile={
+    ...S.profile,
+    name:document.getElementById('p-name')?.value.trim()||S.profile.name,
+    weightKg:parseFloat(document.getElementById('p-wt')?.value)||S.profile.weightKg,
+    heightCm:parseFloat(document.getElementById('p-ht')?.value)||S.profile.heightCm,
+    age:parseInt(document.getElementById('p-age')?.value)||S.profile.age,
+    experience:document.getElementById('p-exp')?.value||S.profile.experience,
+    planetFitness:pf,
+  }
+  _profPF=null
+  save(); toast('Profile saved!'); render()
+}
+
+function saveTM() {
+  const g=(id,fb)=>parseFloat(document.getElementById(id)?.value)||fb
+  S.tm={
+    ...S.tm,
+    bench:g('p-bench',S.tm.bench),
+    squat:g('p-squat',S.tm.squat),
+    deadlift:g('p-dead',S.tm.deadlift),
+    ohp:g('p-ohp',S.tm.ohp),
+    benchSmith:g('p-bs',S.tm.benchSmith||0)||null,
+    squatSmith:g('p-ss',S.tm.squatSmith||0)||null,
+    ohpSmith:g('p-os',S.tm.ohpSmith||0)||null,
+  }
+  save(); toast('Training maxes saved!')
+}
+
+function confirmReset() {
+  if(confirm('Reset ALL data? This cannot be undone.')) {
+    localStorage.removeItem(KEY)
+    location.hash='landing'
+    location.reload()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDER ROUTER
+// ═══════════════════════════════════════════════════════════════════════════
+
+function render() {
+  const page=getPage()
+  if(!S.profile&&!['landing','signup','calculator'].includes(page)) { nav('landing'); return }
+  switch(page) {
+    case 'landing':      renderLanding();      break
+    case 'signup':       renderSignup();       break
+    case 'calculator':   renderCalculator();   break
+    case 'dashboard':    renderDashboard();    break
+    case 'programs':     renderPrograms();     break
+    case 'workout':      renderWorkout();      break
+    case 'analytics':    renderAnalytics();    break
+    case 'achievements': renderAchievements(); break
+    case 'profile':      renderProfile();      break
+    default: S.profile?renderDashboard():renderLanding()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════════════════════
+
+load()
+render()
+</script>
+</body>
+</html>
