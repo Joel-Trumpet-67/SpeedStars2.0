@@ -1,38 +1,32 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
+import { useAppStore } from '@/lib/store'
 import { WeightCalculatorForm } from '@/components/calculator/WeightCalculatorForm'
 import type { CalculatedMaxes } from '@/types'
 
 export default function CalculatorPage() {
   const router = useRouter()
+  const setTrainingMaxes = useAppStore(s => s.setTrainingMaxes)
   const [saving, setSaving] = useState(false)
 
-  const handleSave = async (maxes: CalculatedMaxes) => {
+  const handleSave = (maxes: CalculatedMaxes) => {
     setSaving(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    await supabase.from('training_maxes').upsert({
-      user_id: user.id,
+    setTrainingMaxes({
       bench_barbell: maxes.bench_barbell_tm,
       squat_barbell: maxes.squat_barbell_tm,
       deadlift: maxes.deadlift_tm,
       ohp_barbell: maxes.ohp_barbell_tm,
-      bench_smith: maxes.bench_smith_tm ?? null,
-      squat_smith: maxes.squat_smith_tm ?? null,
-      ohp_smith: maxes.ohp_smith_tm ?? null,
+      bench_smith: maxes.bench_smith_tm ?? undefined,
+      squat_smith: maxes.squat_smith_tm ?? undefined,
+      ohp_smith: maxes.ohp_smith_tm ?? undefined,
       bench_ratio: maxes.bench_ratio,
       squat_ratio: maxes.squat_ratio,
       ohp_ratio: maxes.ohp_ratio,
-      updated_at: new Date().toISOString(),
     })
-
     setSaving(false)
-    router.push('/profile')
+    router.push('/dashboard')
   }
 
   return (
@@ -40,7 +34,7 @@ export default function CalculatorPage() {
       <div>
         <h1 className="text-xl font-bold text-white">Weight Calculator</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Calculate your Training Maxes and see exact weights for every set.
+          Enter your lifts — get exact weights for every set, automatically.
         </p>
       </div>
       <WeightCalculatorForm onSave={handleSave} saving={saving} />

@@ -1,101 +1,90 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/client'
+import { useAppStore } from '@/lib/store'
 import Input from '@/components/ui/Input'
+import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 
 const schema = z.object({
-  display_name: z.string().min(2, 'Name must be at least 2 characters').max(30),
-  email: z.string().email('Invalid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  display_name: z.string().min(2, 'At least 2 characters').max(30),
+  experience_level: z.enum(['beginner', 'intermediate', 'advanced']),
+  planet_fitness_mode: z.boolean(),
 })
 type FormData = z.infer<typeof schema>
 
 export default function SignupPage() {
   const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const profile = useAppStore(s => s.profile)
+  const createProfile = useAppStore(s => s.createProfile)
+
+  useEffect(() => {
+    if (profile) router.replace('/dashboard')
+  }, [profile, router])
+
+  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
+    defaultValues: { experience_level: 'beginner', planet_fitness_mode: false },
   })
 
-  const onSubmit = async (data: FormData) => {
-    setError(null)
-    const supabase = createClient()
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { display_name: data.display_name },
-      },
+  const pfMode = watch('planet_fitness_mode')
+
+  const onSubmit = (data: FormData) => {
+    createProfile({
+      display_name: data.display_name,
+      experience_level: data.experience_level,
+      goals: ['strength'],
+      planet_fitness_mode: data.planet_fitness_mode,
     })
-    if (authError) { setError(authError.message); return }
-
-    if (authData.user) {
-      await supabase.from('profiles').upsert({
-        id: authData.user.id,
-        email: data.email,
-        display_name: data.display_name,
-      })
-    }
-
-    router.push('/dashboard')
-    router.refresh()
+    router.push('/calculator')
   }
 
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-white">Start your ascent</h1>
-        <p className="text-sm text-gray-400 mt-1">Create your free account</p>
+        <p className="text-sm text-gray-400 mt-1">Set up your profile — no account needed</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input
-          label="Display Name"
-          placeholder="Your name or handle"
+          label="Your Name"
+          placeholder="e.g. Alex or Coach K"
           autoComplete="name"
           {...register('display_name')}
           error={errors.display_name?.message}
         />
-        <Input
-          label="Email"
-          type="email"
-          placeholder="you@example.com"
-          autoComplete="email"
-          {...register('email')}
-          error={errors.email?.message}
+        <Select
+          label="Experience Level"
+          options={[
+            { value: 'beginner', label: 'Beginner (< 1 year)' },
+            { value: 'intermediate', label: 'Intermediate (1–3 years)' },
+            { value: 'advanced', label: 'Advanced (3+ years)' },
+          ]}
+          {...register('experience_level')}
         />
-        <Input
-          label="Password"
-          type="password"
-          placeholder="At least 8 characters"
-          autoComplete="new-password"
-          {...register('password')}
-          error={errors.password?.message}
-        />
-
-        {error && (
-          <div className="bg-red-900/30 border border-red-800 rounded-lg px-3 py-2 text-sm text-red-400">
-            {error}
-          </div>
-        )}
+        <label className="flex items-center gap-3 cursor-pointer py-1">
+          <button
+            type="button"
+            onClick={() => setValue('planet_fitness_mode', !pfMode)}
+            className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 shrink-0 ${pfMode ? 'bg-violet-600' : 'bg-gray-700'}`}
+          >
+            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pfMode ? 'translate-x-4' : ''}`} />
+          </button>
+          <span className="text-sm text-gray-300">I train at Planet Fitness (Smith Machine)</span>
+        </label>
 
         <Button type="submit" size="lg" className="w-full" loading={isSubmitting}>
-          Create Account
+          Create Profile
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-500 mt-6">
-        Already have an account?{' '}
-        <Link href="/login" className="text-violet-400 hover:text-violet-300 font-medium">
-          Sign in
-        </Link>
+      <p className="text-xs text-gray-600 text-center mt-4">
+        All data is saved locally in your browser — nothing is sent to a server.
       </p>
     </div>
   )

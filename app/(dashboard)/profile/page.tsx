@@ -1,23 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/client'
+import { useAppStore } from '@/lib/store'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Spinner } from '@/components/ui/Spinner'
 import { getRankIcon, getRankColor } from '@/lib/utils/ranks'
-import type { UserProfile, TrainingMaxes } from '@/types'
+import { useState } from 'react'
 
 const profileSchema = z.object({
   display_name: z.string().min(2).max(30),
-  weight_kg: z.coerce.number().min(0).max(500).optional(),
-  height_cm: z.coerce.number().min(0).max(300).optional(),
+  weight_kg: z.coerce.number().min(0).optional(),
+  height_cm: z.coerce.number().min(0).optional(),
   age: z.coerce.number().min(10).max(100).optional(),
   experience_level: z.enum(['beginner', 'intermediate', 'advanced']),
   planet_fitness_mode: z.boolean(),
@@ -37,95 +34,60 @@ type ProfileForm = z.infer<typeof profileSchema>
 type TMForm = z.infer<typeof tmSchema>
 
 export default function ProfilePage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [savingTM, setSavingTM] = useState(false)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const profile = useAppStore(s => s.profile)
+  const trainingMaxes = useAppStore(s => s.trainingMaxes)
+  const updateProfile = useAppStore(s => s.updateProfile)
+  const setTrainingMaxes = useAppStore(s => s.setTrainingMaxes)
   const [success, setSuccess] = useState('')
 
-  const profileForm = useForm<ProfileForm>({ resolver: zodResolver(profileSchema) })
-  const tmForm = useForm<TMForm>({ resolver: zodResolver(tmSchema) })
+  const profileForm = useForm<ProfileForm>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      display_name: profile?.display_name ?? '',
+      weight_kg: profile?.weight_kg,
+      height_cm: profile?.height_cm,
+      age: profile?.age,
+      experience_level: profile?.experience_level ?? 'beginner',
+      planet_fitness_mode: profile?.planet_fitness_mode ?? false,
+    },
+  })
 
-  useEffect(() => {
-    const load = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+  const tmForm = useForm<TMForm>({
+    resolver: zodResolver(tmSchema),
+    defaultValues: {
+      bench_barbell: trainingMaxes.bench_barbell,
+      squat_barbell: trainingMaxes.squat_barbell,
+      deadlift: trainingMaxes.deadlift,
+      ohp_barbell: trainingMaxes.ohp_barbell,
+      bench_smith: trainingMaxes.bench_smith ?? undefined,
+      squat_smith: trainingMaxes.squat_smith ?? undefined,
+      ohp_smith: trainingMaxes.ohp_smith ?? undefined,
+    },
+  })
 
-      const [{ data: p }, { data: tm }] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('training_maxes').select('*').eq('user_id', user.id).single(),
-      ])
+  const pfMode = profileForm.watch('planet_fitness_mode')
 
-      if (p) {
-        setProfile(p as UserProfile)
-        profileForm.reset({
-          display_name: p.display_name,
-          weight_kg: p.weight_kg ?? undefined,
-          height_cm: p.height_cm ?? undefined,
-          age: p.age ?? undefined,
-          experience_level: p.experience_level,
-          planet_fitness_mode: p.planet_fitness_mode,
-        })
-      }
-      if (tm) {
-        tmForm.reset({
-          bench_barbell: tm.bench_barbell,
-          squat_barbell: tm.squat_barbell,
-          deadlift: tm.deadlift,
-          ohp_barbell: tm.ohp_barbell,
-          bench_smith: tm.bench_smith ?? undefined,
-          squat_smith: tm.squat_smith ?? undefined,
-          ohp_smith: tm.ohp_smith ?? undefined,
-        })
-      }
-      setLoading(false)
-    }
-    load()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onSaveProfile = async (data: ProfileForm) => {
-    setSaving(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('profiles').update({ ...data, updated_at: new Date().toISOString() }).eq('id', user.id)
+  const onSaveProfile = (data: ProfileForm) => {
+    updateProfile(data)
     setSuccess('Profile saved!')
-    setSaving(false)
     setTimeout(() => setSuccess(''), 3000)
   }
 
-  const onSaveTM = async (data: TMForm) => {
-    setSavingTM(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('training_maxes').upsert({
-      user_id: user.id,
-      ...data,
-      updated_at: new Date().toISOString(),
-    })
+  const onSaveTM = (data: TMForm) => {
+    setTrainingMaxes(data)
     setSuccess('Training maxes saved!')
-    setSavingTM(false)
     setTimeout(() => setSuccess(''), 3000)
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Spinner size="lg" />
-    </div>
-  )
+  if (!profile) return null
 
   return (
     <div className="p-4 md:p-6 max-w-xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-bold text-white">Profile</h1>
-        {profile && (
-          <p className={`text-sm mt-0.5 font-medium ${getRankColor(profile.rank)}`}>
-            {getRankIcon(profile.rank)} {profile.rank} · {profile.xp.toLocaleString()} XP
-          </p>
-        )}
+        <p className={`text-sm mt-0.5 font-medium ${getRankColor(profile.rank)}`}>
+          {getRankIcon(profile.rank)} {profile.rank} · {profile.xp.toLocaleString()} XP
+        </p>
       </div>
 
       {success && (
@@ -134,7 +96,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Profile form */}
       <form onSubmit={profileForm.handleSubmit(onSaveProfile)} className="space-y-4">
         <Card>
           <CardHeader><CardTitle>Personal Info</CardTitle></CardHeader>
@@ -155,34 +116,35 @@ export default function ProfilePage() {
               {...profileForm.register('experience_level')}
             />
             <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" {...profileForm.register('planet_fitness_mode')} className="sr-only" />
-              <div
-                onClick={() => profileForm.setValue('planet_fitness_mode', !profileForm.watch('planet_fitness_mode'))}
-                className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${profileForm.watch('planet_fitness_mode') ? 'bg-violet-600' : 'bg-gray-700'}`}
+              <button
+                type="button"
+                onClick={() => profileForm.setValue('planet_fitness_mode', !pfMode)}
+                className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 shrink-0 ${pfMode ? 'bg-violet-600' : 'bg-gray-700'}`}
               >
-                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${profileForm.watch('planet_fitness_mode') ? 'translate-x-4' : ''}`} />
-              </div>
+                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pfMode ? 'translate-x-4' : ''}`} />
+              </button>
               <span className="text-sm text-gray-300">Planet Fitness Mode</span>
             </label>
           </div>
         </Card>
-        <Button type="submit" loading={saving} className="w-full">Save Profile</Button>
+        <Button type="submit" className="w-full">Save Profile</Button>
       </form>
 
-      {/* Training maxes form */}
       <form onSubmit={tmForm.handleSubmit(onSaveTM)} className="space-y-4">
         <Card>
           <CardHeader><CardTitle>Training Maxes (lbs)</CardTitle></CardHeader>
-          <p className="text-xs text-gray-500 mb-3">Enter your current training max (90% of 1RM). Use the Calculator page if you need to calculate these.</p>
+          <p className="text-xs text-gray-500 mb-3">
+            Your Training Max = 90% of 1RM. Use the{' '}
+            <a href="/calculator" className="text-violet-400 hover:underline">Calculator</a> if unsure.
+          </p>
           <div className="space-y-3">
             <Input label="Bench Press TM" type="number" step="2.5" suffix="lbs" {...tmForm.register('bench_barbell')} />
             <Input label="Back Squat TM" type="number" step="2.5" suffix="lbs" {...tmForm.register('squat_barbell')} />
             <Input label="Deadlift TM" type="number" step="2.5" suffix="lbs" {...tmForm.register('deadlift')} />
             <Input label="Overhead Press TM" type="number" step="2.5" suffix="lbs" {...tmForm.register('ohp_barbell')} />
-
-            {profileForm.watch('planet_fitness_mode') && (
+            {pfMode && (
               <div className="pt-3 border-t border-gray-800 space-y-3">
-                <p className="text-xs text-amber-400 font-medium">Smith Machine TMs (override auto-calculated values):</p>
+                <p className="text-xs text-amber-400 font-medium">Smith Machine TMs (optional overrides):</p>
                 <Input label="Smith Bench TM" type="number" step="2.5" suffix="lbs" {...tmForm.register('bench_smith')} />
                 <Input label="Smith Squat TM" type="number" step="2.5" suffix="lbs" {...tmForm.register('squat_smith')} />
                 <Input label="Smith OHP TM" type="number" step="2.5" suffix="lbs" {...tmForm.register('ohp_smith')} />
@@ -190,7 +152,7 @@ export default function ProfilePage() {
             )}
           </div>
         </Card>
-        <Button type="submit" loading={savingTM} className="w-full">Save Training Maxes</Button>
+        <Button type="submit" className="w-full">Save Training Maxes</Button>
       </form>
     </div>
   )

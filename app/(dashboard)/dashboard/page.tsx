@@ -1,59 +1,50 @@
-import { redirect } from 'next/navigation'
+'use client'
+
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { useAppStore } from '@/lib/store'
 import { RankCard } from '@/components/dashboard/RankCard'
 import { StatsGrid } from '@/components/dashboard/StatsGrid'
 import { TrainingMaxCard } from '@/components/dashboard/TrainingMaxCard'
 import { ProgramCard } from '@/components/programs/ProgramCard'
 import { Dumbbell, Plus } from 'lucide-react'
-import type { UserProfile, TrainingMaxes, Program } from '@/types'
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+export default function DashboardPage() {
+  const profile = useAppStore(s => s.profile)
+  const trainingMaxes = useAppStore(s => s.trainingMaxes)
+  const programs = useAppStore(s => s.programs)
+  const workoutLogs = useAppStore(s => s.workoutLogs)
+  const personalRecords = useAppStore(s => s.personalRecords)
 
-  const [
-    { data: profile },
-    { data: trainingMaxes },
-    { data: activeProgram },
-    { count: workoutCount },
-    { count: prCount },
-  ] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-    supabase.from('training_maxes').select('*').eq('user_id', user.id).single(),
-    supabase.from('programs').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false }).limit(1).single(),
-    supabase.from('workout_logs').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('personal_records').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-  ])
+  if (!profile) return null
 
-  if (!profile || !trainingMaxes) redirect('/profile')
+  const activeProgram = programs.find(p => p.status === 'active') ?? null
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-white">
-          Welcome back, {(profile as UserProfile).display_name}
+          Welcome back, {profile.display_name}
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </p>
       </div>
 
-      <RankCard profile={profile as UserProfile} />
+      <RankCard profile={profile} />
       <StatsGrid
-        profile={profile as UserProfile}
-        workoutCount={workoutCount ?? 0}
-        prCount={prCount ?? 0}
+        profile={profile}
+        workoutCount={workoutLogs.length}
+        prCount={personalRecords.length}
       />
 
-      {/* Today's Workout CTA */}
       <div className="bg-gradient-to-r from-violet-900/40 to-violet-800/20 border border-violet-700/30 rounded-xl p-4">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs text-violet-400 font-semibold uppercase tracking-wider mb-1">Ready to Train?</p>
             <h3 className="font-bold text-white">
-              {activeProgram ? `${(activeProgram as Program).name} — Week ${(activeProgram as Program).current_week}` : 'Start a Program'}
+              {activeProgram
+                ? `${activeProgram.name} — Week ${activeProgram.current_week}`
+                : 'Start a Program'}
             </h3>
           </div>
           <Link
@@ -66,12 +57,12 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <TrainingMaxCard trainingMaxes={trainingMaxes as TrainingMaxes} profile={profile as UserProfile} />
+      <TrainingMaxCard trainingMaxes={trainingMaxes} profile={profile} />
 
       {activeProgram ? (
         <div>
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Active Program</h2>
-          <ProgramCard program={activeProgram as Program} />
+          <ProgramCard program={activeProgram} />
         </div>
       ) : (
         <div className="bg-gray-900 border border-dashed border-gray-700 rounded-xl p-6 text-center">

@@ -1,64 +1,46 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dumbbell, AlertCircle } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { useAppStore } from '@/lib/store'
 import { generateWorkout } from '@/lib/workout-engine/programs'
 import { WorkoutSession } from '@/components/workout/WorkoutSession'
 import Button from '@/components/ui/Button'
-import { Spinner } from '@/components/ui/Spinner'
 import { calculateWorkoutXP } from '@/lib/utils/xp'
-import type { UserProfile, TrainingMaxes, Program, GeneratedWorkout, CompletedExercise } from '@/types'
+import type { CompletedExercise, GeneratedWorkout } from '@/types'
 
 export default function WorkoutPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const profile = useAppStore(s => s.profile)
+  const trainingMaxes = useAppStore(s => s.trainingMaxes)
+  const programs = useAppStore(s => s.programs)
+  const updateProgram = useAppStore(s => s.updateProgram)
+  const logWorkout = useAppStore(s => s.logWorkout)
+  const checkAchievements = useAppStore(s => s.checkAchievements)
+
+  const [sessionActive, setSessionActive] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [trainingMaxes, setTrainingMaxes] = useState<TrainingMaxes | null>(null)
-  const [activeProgram, setActiveProgram] = useState<Program | null>(null)
-  const [workout, setWorkout] = useState<GeneratedWorkout | null>(null)
-  const [sessionActive, setSessionActive] = useState(false)
 
-  useEffect(() => {
-    const load = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+  const activeProgram = programs.find(p => p.status === 'active') ?? null
 
-      const [{ data: p }, { data: tm }, { data: prog }] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('training_maxes').select('*').eq('user_id', user.id).single(),
-        supabase.from('programs').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false }).limit(1).single(),
-      ])
+  const workout: GeneratedWorkout | null = activeProgram
+    ? generateWorkout({
+        programType: activeProgram.type,
+        week: activeProgram.current_week,
+        day: activeProgram.current_day,
+        trainingMaxes,
+        planetFitnessMode: activeProgram.planet_fitness_mode,
+      })
+    : null
 
-      setProfile(p as UserProfile)
-      setTrainingMaxes(tm as TrainingMaxes)
-      setActiveProgram(prog as Program)
-
-      if (p && tm && prog) {
-        const w = generateWorkout({
-          programType: (prog as Program).type,
-          week: (prog as Program).current_week,
-          day: (prog as Program).current_day,
-          trainingMaxes: tm as TrainingMaxes,
-          planetFitnessMode: (prog as Program).planet_fitness_mode,
-        })
-        setWorkout(w)
-      }
-      setLoading(false)
-    }
-    load()
-  }, [router])
-
-  const handleComplete = async (completedExercises: CompletedExercise[], durationSeconds: number) => {
-    if (!profile || !trainingMaxes || !activeProgram || !workout) return
+  const handleComplete = (completedExercises: CompletedExercise[], durationSeconds: number) => {
+    if (!profile || !activeProgram || !workout) return
     setSaving(true)
+    setError(null)
 
     try {
-      const supabase = createClient()
       const totalVolume = completedExercises.reduce(
         (sum, ex) => sum + ex.sets.reduce((s, set) => s + set.weight * set.reps, 0), 0
       )
@@ -71,8 +53,7 @@ export default function WorkoutPage() {
         streak: profile.streak,
       })
 
-      await supabase.from('workout_logs').insert({
-        user_id: profile.id,
+      logWorkout({
         program_id: activeProgram.id,
         week: workout.week,
         day: workout.day,
@@ -81,51 +62,29 @@ export default function WorkoutPage() {
         total_volume: totalVolume,
         duration_seconds: durationSeconds,
         xp_earned: xpEarned,
+        completed_at: new Date().toISOString(),
       })
 
-      // Advance program day
+      // Advance program
       let nextDay = activeProgram.current_day + 1
       let nextWeek = activeProgram.current_week
       if (nextDay > 4) { nextDay = 1; nextWeek++ }
       const newStatus = nextWeek > activeProgram.duration_weeks ? 'completed' : 'active'
+      updateProgram(activeProgram.id, { current_day: nextDay, current_week: nextWeek, status: newStatus })
 
-      await supabase.from('programs').update({
-        current_day: nextDay,
-        current_week: nextWeek,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      }).eq('id', activeProgram.id)
-
-      // Update XP, streak
-      const today = new Date().toISOString().split('T')[0]
-      const lastWorkout = profile.last_workout_date
-      const streakIncrement = lastWorkout === new Date(Date.now() - 86400000).toISOString().split('T')[0] ? 1 : 0
-
-      await supabase.from('profiles').update({
-        xp: profile.xp + xpEarned,
-        streak: streakIncrement ? profile.streak + 1 : 1,
-        last_workout_date: today,
-        updated_at: new Date().toISOString(),
-      }).eq('id', profile.id)
-
+      checkAchievements()
       router.push('/dashboard')
-    } catch (e) {
-      setError('Failed to save workout. Please try again.')
+    } catch {
+      setError('Failed to save workout.')
       setSaving(false)
     }
   }
-
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Spinner size="lg" />
-    </div>
-  )
 
   if (!activeProgram) return (
     <div className="p-4 md:p-6 max-w-xl mx-auto text-center">
       <Dumbbell className="w-12 h-12 text-gray-700 mx-auto mb-4" />
       <h2 className="text-lg font-bold text-white mb-2">No Active Program</h2>
-      <p className="text-sm text-gray-500 mb-4">Create a program to get your workouts.</p>
+      <p className="text-sm text-gray-500 mb-4">Create a program to get started.</p>
       <Button onClick={() => router.push('/programs')}>Go to Programs</Button>
     </div>
   )
@@ -133,8 +92,8 @@ export default function WorkoutPage() {
   if (!workout) return (
     <div className="p-4 md:p-6 max-w-xl mx-auto text-center">
       <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-      <h2 className="text-lg font-bold text-white mb-2">Workout generation failed</h2>
-      <p className="text-sm text-gray-500">Check your training maxes in your profile.</p>
+      <h2 className="text-lg font-bold text-white mb-2">No workout generated</h2>
+      <p className="text-sm text-gray-500">Set your training maxes in the Calculator.</p>
     </div>
   )
 
